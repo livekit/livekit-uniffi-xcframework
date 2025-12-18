@@ -25,14 +25,6 @@ Pod::Spec.new do |spec|
   CMD
 
   spec.module_name = "LiveKitUniFFI"
-  spec.default_subspec = "Bindings"
-
-  spec.subspec "Bindings" do |ss|
-    ss.source_files = "Sources/LiveKitUniFFI/**/*.swift"
-    ss.dependency "LiveKitUniFFI/XCFramework"
-  end
-
-  spec.subspec "XCFramework" do |ss|
-    ss.vendored_frameworks = "RustLiveKitUniFFI.xcframework"
-  end
+  spec.source_files = "Sources/LiveKitUniFFI/**/*.swift"
+  spec.vendored_frameworks = "RustLiveKitUniFFI.xcframework"
 end
