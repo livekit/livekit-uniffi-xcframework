@@ -1,6 +1,6 @@
 Pod::Spec.new do |spec|
   spec.name = "LiveKitUniFFI"
-  spec.version = "0.0.3"
+  spec.version = "0.0.4"
   spec.summary = "LiveKit UniFFI bindings"
   spec.description = <<-DESC
     LiveKit UniFFI XCFramework with Swift bindings
