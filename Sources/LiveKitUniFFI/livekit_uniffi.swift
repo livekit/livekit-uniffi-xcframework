@@ -557,6 +557,8 @@ public struct ApiCredentials: Equatable, Hashable {
     }
 
     
+
+    
 }
 
 #if compiler(>=6)
@@ -628,6 +630,8 @@ public struct Claims: Equatable, Hashable {
         self.attributes = attributes
         self.roomConfiguration = roomConfiguration
     }
+
+    
 
     
 }
@@ -706,6 +710,8 @@ public struct LogForwardEntry: Equatable, Hashable {
     }
 
     
+
+    
 }
 
 #if compiler(>=6)
@@ -768,6 +774,8 @@ public struct RoomAgentDispatch: Equatable, Hashable {
         self.agentName = agentName
         self.metadata = metadata
     }
+
+    
 
     
 }
@@ -842,6 +850,8 @@ public struct RoomConfiguration: Equatable, Hashable {
     }
 
     
+
+    
 }
 
 #if compiler(>=6)
@@ -914,6 +924,8 @@ public struct SipGrants: Equatable, Hashable {
     }
 
     
+
+    
 }
 
 #if compiler(>=6)
@@ -984,6 +996,8 @@ public struct TokenOptions: Equatable, Hashable {
         self.sha256 = sha256
         self.roomConfiguration = roomConfiguration
     }
+
+    
 
     
 }
@@ -1083,6 +1097,8 @@ public struct VideoGrants: Equatable, Hashable {
     }
 
     
+
+    
 }
 
 #if compiler(>=6)
@@ -1163,6 +1179,8 @@ public enum AccessTokenError: Swift.Error, Equatable, Hashable, Foundation.Local
     case InvalidClaims(message: String)
     
     case Encoding(message: String)
+    
+
     
 
     
@@ -1261,6 +1279,8 @@ public enum LogForwardFilter: Equatable, Hashable {
 
 
 
+
+
 }
 
 #if compiler(>=6)
@@ -1350,6 +1370,8 @@ public enum LogForwardLevel: Equatable, Hashable {
     case info
     case debug
     case trace
+
+
 
 
 
