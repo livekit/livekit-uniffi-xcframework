@@ -435,6 +435,22 @@ fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt32: FfiConverterPrimitive {
+    typealias FfiType = Int32
+    typealias SwiftType = Int32
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int32 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int32, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
     typealias FfiType = UInt64
     typealias SwiftType = UInt64
@@ -767,12 +783,16 @@ public func FfiConverterTypeLogForwardEntry_lower(_ value: LogForwardEntry) -> R
 public struct RoomAgentDispatch: Equatable, Hashable {
     public var agentName: String
     public var metadata: String
+    public var restartPolicy: Int32
+    public var deployment: String
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(agentName: String, metadata: String) {
+    public init(agentName: String, metadata: String, restartPolicy: Int32, deployment: String) {
         self.agentName = agentName
         self.metadata = metadata
+        self.restartPolicy = restartPolicy
+        self.deployment = deployment
     }
 
     
@@ -792,13 +812,17 @@ public struct FfiConverterTypeRoomAgentDispatch: FfiConverterRustBuffer {
         return
             try RoomAgentDispatch(
                 agentName: FfiConverterString.read(from: &buf), 
-                metadata: FfiConverterString.read(from: &buf)
+                metadata: FfiConverterString.read(from: &buf), 
+                restartPolicy: FfiConverterInt32.read(from: &buf), 
+                deployment: FfiConverterString.read(from: &buf)
         )
     }
 
     public static func write(_ value: RoomAgentDispatch, into buf: inout [UInt8]) {
         FfiConverterString.write(value.agentName, into: &buf)
         FfiConverterString.write(value.metadata, into: &buf)
+        FfiConverterInt32.write(value.restartPolicy, into: &buf)
+        FfiConverterString.write(value.deployment, into: &buf)
     }
 }
 

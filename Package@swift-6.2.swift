@@ -1,4 +1,5 @@
 // swift-tools-version: 6.2
+// Generated from Rust template
 
 import PackageDescription
 
@@ -22,10 +23,11 @@ let package = Package(
             name: "LiveKitUniFFI",
             dependencies: ["RustLiveKitUniFFI"]
         ),
+        
         .binaryTarget(
             name: "RustLiveKitUniFFI",
-            url: "https://github.com/livekit/livekit-uniffi-xcframework/releases/download/0.0.6/RustLiveKitUniFFI.xcframework.zip",
-            checksum: "0d3f2ce159a224c728f8b131068d53bbf9b13d968cda0edc68a6a2290f2651ed"
+            url: "https://github.com/livekit/livekit-uniffi-xcframework/releases/download/0.0.0-test1/RustLiveKitUniFFI.xcframework.zip",
+            checksum: "a54309510f4b8385f21e43362f27694b84f878a72c70f46800a1ec564a3135f4"
         )
     ]
 )
