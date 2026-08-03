@@ -1,4 +1,5 @@
 // swift-tools-version: 6.2
+// Generated from Rust template
 
 import PackageDescription
 
@@ -24,8 +25,13 @@ let package = Package(
         ),
         .binaryTarget(
             name: "RustLiveKitUniFFI",
-            url: "https://github.com/livekit/livekit-uniffi-xcframework/releases/download/0.0.6/RustLiveKitUniFFI.xcframework.zip",
-            checksum: "0d3f2ce159a224c728f8b131068d53bbf9b13d968cda0edc68a6a2290f2651ed"
+            url: "https://github.com/livekit/livekit-uniffi-xcframework/releases/download/0.1.8/RustLiveKitUniFFI.xcframework.zip",
+            checksum: "e3df837197c85c182991d5ed2191e593aa6da4cc463727e76fcfe57f041d4a44"
         )
-    ]
+    ],
+    // Workaround for cargo-swift pinning uniffi_bindgen 0.31.1: its generated
+    // callback `vtablePtr` isn't `nonisolated(unsafe)`, so the bindings fail the
+    // Swift 6 language mode. Remove once cargo-swift ships uniffi 0.31.2
+    // (antoniusnaumann/cargo-swift#102).
+    swiftLanguageModes: [.v5]
 )
