@@ -1430,6 +1430,15 @@ public protocol RemoteDataTrackProtocol: AnyObject, Sendable {
     func publisherIdentity()  -> String
     
     /**
+     * Configures options for the pipeline handling incoming packets for this track.
+     *
+     * These options apply to all current and future subscriptions of this track, and may be
+     * set at any time. New options take affect with the next received packet.
+
+     */
+    func setPipelineOptions(options: RemoteDataTrackPipelineOptions) 
+    
+    /**
      * Subscribes to the data track.
      */
     func subscribe() async throws  -> DataTrackStream
@@ -1536,6 +1545,21 @@ open func publisherIdentity() -> String  {
             self.uniffiCloneHandle(),$0
     )
 })
+}
+    
+    /**
+     * Configures options for the pipeline handling incoming packets for this track.
+     *
+     * These options apply to all current and future subscriptions of this track, and may be
+     * set at any time. New options take affect with the next received packet.
+
+     */
+open func setPipelineOptions(options: RemoteDataTrackPipelineOptions)  {try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_remotedatatrack_set_pipeline_options(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeRemoteDataTrackPipelineOptions_lower(options),$0
+    )
+}
 }
     
     /**
@@ -2583,11 +2607,17 @@ public func FfiConverterTypeDataTrackSchemaId_lower(_ value: DataTrackSchemaId) 
 
 
 public struct DataTrackSubscribeOptions: Equatable, Hashable {
+    /**
+     * Maximum number of received frames buffered internally. Zero is clamped to one.
+     */
     public var bufferSize: UInt32
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(bufferSize: UInt32) {
+    public init(
+        /**
+         * Maximum number of received frames buffered internally. Zero is clamped to one.
+         */bufferSize: UInt32 = UInt32(16)) {
         self.bufferSize = bufferSize
     }
 
@@ -2695,6 +2725,75 @@ public func FfiConverterTypeLogForwardEntry_lift(_ buf: RustBuffer) throws -> Lo
 #endif
 public func FfiConverterTypeLogForwardEntry_lower(_ value: LogForwardEntry) -> RustBuffer {
     return FfiConverterTypeLogForwardEntry.lower(value)
+}
+
+
+/**
+ * FFI wrapper around [`livekit_datatrack::api::RemoteDataTrackPipelineOptions`]. The underlying
+ * type uses the builder pattern with private fields.
+
+ */
+public struct RemoteDataTrackPipelineOptions: Equatable, Hashable {
+    /**
+     * Maximum number of partial frames the depacketizer will track concurrently for this track.
+     *
+     * Higher values give more out-of-order tolerance for high-frequency senders at the cost of
+     * additional buffering. Zero is clamped to one.
+
+     */
+    public var maxPartialFrames: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Maximum number of partial frames the depacketizer will track concurrently for this track.
+         *
+         * Higher values give more out-of-order tolerance for high-frequency senders at the cost of
+         * additional buffering. Zero is clamped to one.
+
+         */maxPartialFrames: UInt32 = UInt32(1)) {
+        self.maxPartialFrames = maxPartialFrames
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension RemoteDataTrackPipelineOptions: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRemoteDataTrackPipelineOptions: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RemoteDataTrackPipelineOptions {
+        return
+            try RemoteDataTrackPipelineOptions(
+                maxPartialFrames: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RemoteDataTrackPipelineOptions, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.maxPartialFrames, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRemoteDataTrackPipelineOptions_lift(_ buf: RustBuffer) throws -> RemoteDataTrackPipelineOptions {
+    return try FfiConverterTypeRemoteDataTrackPipelineOptions.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRemoteDataTrackPipelineOptions_lower(_ value: RemoteDataTrackPipelineOptions) -> RustBuffer {
+    return FfiConverterTypeRemoteDataTrackPipelineOptions.lower(value)
 }
 
 
@@ -3967,50 +4066,6 @@ fileprivate struct FfiConverterDictionaryStringString: FfiConverterRustBuffer {
  * Typealias from the type name used in the UDL file to the builtin type.  This
  * is needed because the UDL type name is used in function/method signatures.
  */
-public typealias Bytes = Data
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeBytes: FfiConverter {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Bytes {
-        return try FfiConverterData.read(from: &buf)
-    }
-
-    public static func write(_ value: Bytes, into buf: inout [UInt8]) {
-        return FfiConverterData.write(value, into: &buf)
-    }
-
-    public static func lift(_ value: RustBuffer) throws -> Bytes {
-        return try FfiConverterData.lift(value)
-    }
-
-    public static func lower(_ value: Bytes) -> RustBuffer {
-        return FfiConverterData.lower(value)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeBytes_lift(_ value: RustBuffer) throws -> Bytes {
-    return try FfiConverterTypeBytes.lift(value)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeBytes_lower(_ value: Bytes) -> RustBuffer {
-    return FfiConverterTypeBytes.lower(value)
-}
-
-
-
-/**
- * Typealias from the type name used in the UDL file to the builtin type.  This
- * is needed because the UDL type name is used in function/method signatures.
- */
 public typealias DataTrackSid = String
 
 #if swift(>=5.8)
@@ -4242,7 +4297,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_livekit_uniffi_checksum_method_localdatatrackmanager_handle_sfu_request_response() != 14552) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_uniffi_checksum_method_localdatatrackmanager_publish_responses_for_sync_state() != 29726) {
+    if (uniffi_livekit_uniffi_checksum_method_localdatatrackmanager_publish_responses_for_sync_state() != 22678) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_livekit_uniffi_checksum_method_localdatatrackmanager_publish_track() != 31959) {
@@ -4254,7 +4309,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_livekit_uniffi_checksum_method_localdatatrackmanagerdelegate_on_signal_request() != 28972) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_uniffi_checksum_method_localdatatrackmanagerdelegate_on_packets_available() != 32305) {
+    if (uniffi_livekit_uniffi_checksum_method_localdatatrackmanagerdelegate_on_packets_available() != 19578) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_livekit_uniffi_checksum_method_datatrackstream_next() != 35219) {
@@ -4269,6 +4324,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_livekit_uniffi_checksum_method_remotedatatrack_publisher_identity() != 40711) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_livekit_uniffi_checksum_method_remotedatatrack_set_pipeline_options() != 47812) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_livekit_uniffi_checksum_method_remotedatatrack_subscribe() != 23718) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -4278,7 +4336,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_livekit_uniffi_checksum_method_remotedatatrack_wait_for_unpublish() != 30281) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_uniffi_checksum_method_remotedatatrackmanager_handle_packet_received() != 28487) {
+    if (uniffi_livekit_uniffi_checksum_method_remotedatatrackmanager_handle_packet_received() != 20834) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_livekit_uniffi_checksum_method_remotedatatrackmanager_handle_sfu_join_response() != 40603) {
@@ -4311,6 +4369,7 @@ private let initializationResult: InitializationResult = {
 
     uniffiCallbackInitLocalDataTrackManagerDelegate()
     uniffiCallbackInitRemoteDataTrackManagerDelegate()
+    uniffiEnsureLivekitCommonInitialized()
     uniffiEnsureLivekitDatatrackInitialized()
     return InitializationResult.ok
 }()

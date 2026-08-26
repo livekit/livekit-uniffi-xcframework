@@ -1839,14 +1839,6 @@ public func FfiConverterTypePushFrameErrorReason_lower(_ value: PushFrameErrorRe
  * Typealias from the type name used in the UDL file to the builtin type.  This
  * is needed because the UDL type name is used in function/method signatures.
  */
-// cargo-make swift-workarounds: duplicate Bytes converter removed (kept in livekit_uniffi.swift)
-
-
-
-/**
- * Typealias from the type name used in the UDL file to the builtin type.  This
- * is needed because the UDL type name is used in function/method signatures.
- */
 public typealias InitializationVector = Data
 
 #if swift(>=5.8)
@@ -1901,15 +1893,16 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_livekit_datatrack_checksum_method_decryptionprovider_decrypt() != 23300) {
+    if (uniffi_livekit_datatrack_checksum_method_decryptionprovider_decrypt() != 1225) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_datatrack_checksum_method_encryptionprovider_encrypt() != 64301) {
+    if (uniffi_livekit_datatrack_checksum_method_encryptionprovider_encrypt() != 40311) {
         return InitializationResult.apiChecksumMismatch
     }
 
     uniffiCallbackInitDecryptionProvider()
     uniffiCallbackInitEncryptionProvider()
+    uniffiEnsureLivekitCommonInitialized()
     return InitializationResult.ok
 }()
 
