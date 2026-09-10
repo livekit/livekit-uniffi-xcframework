@@ -473,6 +473,22 @@ fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt64: FfiConverterPrimitive {
+    typealias FfiType = Int64
+    typealias SwiftType = Int64
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int64 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int64, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterBool : FfiConverter {
     typealias FfiType = Int8
     typealias SwiftType = Bool
@@ -580,6 +596,413 @@ fileprivate struct FfiConverterDuration: FfiConverterRustBuffer {
         writeInt(&buf, nanoseconds)
     }
 }
+
+
+
+
+/**
+ * Reader for an incoming byte data stream.
+ */
+public protocol ByteStreamReaderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Information about the underlying stream.
+     */
+    func info()  -> ByteStreamInfo
+    
+    /**
+     * Returns the next chunk, or `None` once the stream has closed.
+     */
+    func next() async throws  -> Bytes?
+    
+    /**
+     * Reads every chunk, concatenating them into a single buffer returned once the stream closes.
+     */
+    func readAll() async throws  -> Bytes
+    
+}
+/**
+ * Reader for an incoming byte data stream.
+ */
+open class ByteStreamReader: ByteStreamReaderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_livekit_uniffi_fn_clone_bytestreamreader(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_livekit_uniffi_fn_free_bytestreamreader(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Information about the underlying stream.
+     */
+open func info() -> ByteStreamInfo  {
+    return try!  FfiConverterTypeByteStreamInfo_lift(try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_bytestreamreader_info(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Returns the next chunk, or `None` once the stream has closed.
+     */
+open func next()async throws  -> Bytes?  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_bytestreamreader_next(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionTypeBytes.lift,
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+    /**
+     * Reads every chunk, concatenating them into a single buffer returned once the stream closes.
+     */
+open func readAll()async throws  -> Bytes  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_bytestreamreader_read_all(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeBytes_lift,
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeByteStreamReader: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = ByteStreamReader
+
+    public static func lift(_ handle: UInt64) throws -> ByteStreamReader {
+        return ByteStreamReader(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: ByteStreamReader) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ByteStreamReader {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ByteStreamReader, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeByteStreamReader_lift(_ handle: UInt64) throws -> ByteStreamReader {
+    return try FfiConverterTypeByteStreamReader.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeByteStreamReader_lower(_ value: ByteStreamReader) -> UInt64 {
+    return FfiConverterTypeByteStreamReader.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Writer for an open byte data stream.
+ */
+public protocol ByteStreamWriterProtocol: AnyObject, Sendable {
+    
+    /**
+     * Closes the stream normally.
+     */
+    func close() async throws 
+    
+    /**
+     * Closes the stream abnormally with a reason.
+     */
+    func closeWithReason(reason: String) async throws 
+    
+    /**
+     * Information about the underlying stream.
+     */
+    func info()  -> ByteStreamInfo
+    
+    /**
+     * Whether the stream is still open — false once it has been closed locally or a send has failed.
+     */
+    func isOpen() async  -> Bool
+    
+    /**
+     * Appends bytes to the stream.
+     */
+    func write(data: Bytes) async throws 
+    
+}
+/**
+ * Writer for an open byte data stream.
+ */
+open class ByteStreamWriter: ByteStreamWriterProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_livekit_uniffi_fn_clone_bytestreamwriter(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_livekit_uniffi_fn_free_bytestreamwriter(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Closes the stream normally.
+     */
+open func close()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_bytestreamwriter_close(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_void,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_void,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+    /**
+     * Closes the stream abnormally with a reason.
+     */
+open func closeWithReason(reason: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_bytestreamwriter_close_with_reason(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(reason)
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_void,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_void,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+    /**
+     * Information about the underlying stream.
+     */
+open func info() -> ByteStreamInfo  {
+    return try!  FfiConverterTypeByteStreamInfo_lift(try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_bytestreamwriter_info(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Whether the stream is still open — false once it has been closed locally or a send has failed.
+     */
+open func isOpen()async  -> Bool  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_bytestreamwriter_is_open(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_i8,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_i8,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_i8,
+            liftFunc: FfiConverterBool.lift,
+            errorHandler: nil
+            
+        )
+}
+    
+    /**
+     * Appends bytes to the stream.
+     */
+open func write(data: Bytes)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_bytestreamwriter_write(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeBytes_lower(data)
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_void,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_void,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeByteStreamWriter: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = ByteStreamWriter
+
+    public static func lift(_ handle: UInt64) throws -> ByteStreamWriter {
+        return ByteStreamWriter(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: ByteStreamWriter) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ByteStreamWriter {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ByteStreamWriter, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeByteStreamWriter_lift(_ handle: UInt64) throws -> ByteStreamWriter {
+    return try FfiConverterTypeByteStreamWriter.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeByteStreamWriter_lower(_ value: ByteStreamWriter) -> UInt64 {
+    return FfiConverterTypeByteStreamWriter.lower(value)
+}
+
+
 
 
 
@@ -715,6 +1138,772 @@ public func FfiConverterTypeDataTrackStream_lift(_ handle: UInt64) throws -> Dat
 #endif
 public func FfiConverterTypeDataTrackStream_lower(_ value: DataTrackStream) -> UInt64 {
     return FfiConverterTypeDataTrackStream.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Receives inbound data-stream packets and processes them on the incoming manager's actor loop,
+ * surfacing opened readers through a foreign delegate.
+ *
+ * Mirrors [`crate::data_track::remote::RemoteDataTrackManager`]: `handle_packet_received` is a
+ * cheap synchronous enqueue (safe to call from a native data-channel callback), while
+ * decompression and reassembly happen on the spawned `run` task in packet order.
+ */
+public protocol IncomingDataStreamManagerProtocol: AnyObject, Sendable {
+    
+    /**
+     * Aborts all open incoming streams so their readers error instead of hanging (e.g. on
+     * disconnect). Handler wiring on the foreign side survives, so streams that arrive later
+     * (e.g. after a reconnect) are still processed.
+     */
+    func abortAllStreams() 
+    
+    /**
+     * Aborts open incoming streams sent by `identity` (e.g. when that participant disconnects
+     * mid-send), so their readers error instead of hanging.
+     */
+    func abortStreamsFrom(identity: String) 
+    
+    /**
+     * Handles an encoded [`livekit_protocol::DataPacket`] received over the data channel.
+     *
+     * Fire-and-forget: the packet is decoded and enqueued in order; processing happens on the
+     * manager's run loop. Non-data-stream or undecodable packets are ignored.
+     *
+     * `encryption_type` is how this packet arrived on the wire, and must be passed by the host
+     * because it cannot be recovered from the bytes: `encrypted_packet` is a member of the
+     * `DataPacket.value` oneof, so decrypting replaces it with the decrypted stream packet.
+     * Hosts without end-to-end encryption pass [`EncryptionType::None`]; hosts with E2EE pass
+     * the type they decrypted with, letting the manager reject chunks whose encryption doesn't
+     * match their stream's header ([`DataStreamError::EncryptionTypeMismatch`]).
+     */
+    func handlePacketReceived(packet: Bytes, encryptionType: EncryptionType) 
+    
+    /**
+     * Number of currently open incoming streams: streams announced by a header that are still
+     * awaiting more packets. Inline (single-packet) streams complete immediately and are never
+     * counted.
+     *
+     * The query runs on the manager's loop in order with previously submitted events, so a
+     * packet or abort passed beforehand is reflected in the answer — useful in tests to wait for
+     * a header to register (or an abort to land) without racing the run loop.
+     */
+    func openStreamCount() async  -> UInt64
+    
+}
+/**
+ * Receives inbound data-stream packets and processes them on the incoming manager's actor loop,
+ * surfacing opened readers through a foreign delegate.
+ *
+ * Mirrors [`crate::data_track::remote::RemoteDataTrackManager`]: `handle_packet_received` is a
+ * cheap synchronous enqueue (safe to call from a native data-channel callback), while
+ * decompression and reassembly happen on the spawned `run` task in packet order.
+ */
+open class IncomingDataStreamManager: IncomingDataStreamManagerProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_livekit_uniffi_fn_clone_incomingdatastreammanager(self.handle, $0) }
+    }
+    /**
+     * Creates a manager that surfaces opened streams to `delegate`.
+     *
+     * `max_payload_byte_length` caps the decompressed size of a single incoming stream
+     * (`None` = default, 5 GB) and is **fixed for the lifetime of the manager**. If the host
+     * sources it from per-connection options that aren't final until connect — and can differ
+     * between sessions of the same host object — construct a fresh manager for each session
+     * rather than lazily memoizing one, or the first session's value is silently pinned. (Same
+     * class of rough edge as a single room instance being `connect()`ed multiple times.)
+     * Rebuilding is cheap and safe: dropping the manager cancels its tasks, and handler wiring
+     * lives on the foreign side.
+     */
+public convenience init(delegate: IncomingDataStreamManagerDelegate, maxPayloadByteLength: UInt64?) {
+    let handle =
+        try! rustCall() {
+    uniffi_livekit_uniffi_fn_constructor_incomingdatastreammanager_new(
+        FfiConverterTypeIncomingDataStreamManagerDelegate_lower(delegate),
+        FfiConverterOptionUInt64.lower(maxPayloadByteLength),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_livekit_uniffi_fn_free_incomingdatastreammanager(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Aborts all open incoming streams so their readers error instead of hanging (e.g. on
+     * disconnect). Handler wiring on the foreign side survives, so streams that arrive later
+     * (e.g. after a reconnect) are still processed.
+     */
+open func abortAllStreams()  {try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_incomingdatastreammanager_abort_all_streams(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+    /**
+     * Aborts open incoming streams sent by `identity` (e.g. when that participant disconnects
+     * mid-send), so their readers error instead of hanging.
+     */
+open func abortStreamsFrom(identity: String)  {try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_incomingdatastreammanager_abort_streams_from(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(identity),$0
+    )
+}
+}
+    
+    /**
+     * Handles an encoded [`livekit_protocol::DataPacket`] received over the data channel.
+     *
+     * Fire-and-forget: the packet is decoded and enqueued in order; processing happens on the
+     * manager's run loop. Non-data-stream or undecodable packets are ignored.
+     *
+     * `encryption_type` is how this packet arrived on the wire, and must be passed by the host
+     * because it cannot be recovered from the bytes: `encrypted_packet` is a member of the
+     * `DataPacket.value` oneof, so decrypting replaces it with the decrypted stream packet.
+     * Hosts without end-to-end encryption pass [`EncryptionType::None`]; hosts with E2EE pass
+     * the type they decrypted with, letting the manager reject chunks whose encryption doesn't
+     * match their stream's header ([`DataStreamError::EncryptionTypeMismatch`]).
+     */
+open func handlePacketReceived(packet: Bytes, encryptionType: EncryptionType)  {try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_incomingdatastreammanager_handle_packet_received(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeBytes_lower(packet),
+        FfiConverterTypeEncryptionType_lower(encryptionType),$0
+    )
+}
+}
+    
+    /**
+     * Number of currently open incoming streams: streams announced by a header that are still
+     * awaiting more packets. Inline (single-packet) streams complete immediately and are never
+     * counted.
+     *
+     * The query runs on the manager's loop in order with previously submitted events, so a
+     * packet or abort passed beforehand is reflected in the answer — useful in tests to wait for
+     * a header to register (or an abort to land) without racing the run loop.
+     */
+open func openStreamCount()async  -> UInt64  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_incomingdatastreammanager_open_stream_count(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterUInt64.lift,
+            errorHandler: nil
+            
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeIncomingDataStreamManager: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = IncomingDataStreamManager
+
+    public static func lift(_ handle: UInt64) throws -> IncomingDataStreamManager {
+        return IncomingDataStreamManager(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: IncomingDataStreamManager) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> IncomingDataStreamManager {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: IncomingDataStreamManager, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeIncomingDataStreamManager_lift(_ handle: UInt64) throws -> IncomingDataStreamManager {
+    return try FfiConverterTypeIncomingDataStreamManager.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeIncomingDataStreamManager_lower(_ value: IncomingDataStreamManager) -> UInt64 {
+    return FfiConverterTypeIncomingDataStreamManager.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Delegate for receiving output events from [`IncomingDataStreamManager`].
+ *
+ * Only stream lifecycle events (opened/closed) are surfaced. The manager's deprecated v1 raw
+ * chunk/trailer notifications are intentionally not forwarded over the FFI boundary.
+ */
+public protocol IncomingDataStreamManagerDelegate: AnyObject, Sendable {
+    
+    /**
+     * A byte stream was opened by `identity` and is ready to be read.
+     */
+    func onByteStreamOpened(reader: ByteStreamReader, identity: String) 
+    
+    /**
+     * A text stream was opened by `identity` and is ready to be read.
+     */
+    func onTextStreamOpened(reader: TextStreamReader, identity: String) 
+    
+    /**
+     * A previously opened stream terminated on the wire and will produce no further data: its
+     * trailer arrived, its (single-packet) inline payload completed, it failed, or it was
+     * aborted. Emitted exactly once per opened stream, after the corresponding open event.
+     *
+     * Hosts delivering streams on ordered topics use this to know when a stream's handler chain
+     * can advance — a stream that is still open must not block streams opened after it forever.
+     */
+    func onStreamClosed(streamId: String, identity: String) 
+    
+}
+/**
+ * Delegate for receiving output events from [`IncomingDataStreamManager`].
+ *
+ * Only stream lifecycle events (opened/closed) are surfaced. The manager's deprecated v1 raw
+ * chunk/trailer notifications are intentionally not forwarded over the FFI boundary.
+ */
+open class IncomingDataStreamManagerDelegateImpl: IncomingDataStreamManagerDelegate, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_livekit_uniffi_fn_clone_incomingdatastreammanagerdelegate(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_livekit_uniffi_fn_free_incomingdatastreammanagerdelegate(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * A byte stream was opened by `identity` and is ready to be read.
+     */
+open func onByteStreamOpened(reader: ByteStreamReader, identity: String)  {try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_incomingdatastreammanagerdelegate_on_byte_stream_opened(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeByteStreamReader_lower(reader),
+        FfiConverterString.lower(identity),$0
+    )
+}
+}
+    
+    /**
+     * A text stream was opened by `identity` and is ready to be read.
+     */
+open func onTextStreamOpened(reader: TextStreamReader, identity: String)  {try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_incomingdatastreammanagerdelegate_on_text_stream_opened(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeTextStreamReader_lower(reader),
+        FfiConverterString.lower(identity),$0
+    )
+}
+}
+    
+    /**
+     * A previously opened stream terminated on the wire and will produce no further data: its
+     * trailer arrived, its (single-packet) inline payload completed, it failed, or it was
+     * aborted. Emitted exactly once per opened stream, after the corresponding open event.
+     *
+     * Hosts delivering streams on ordered topics use this to know when a stream's handler chain
+     * can advance — a stream that is still open must not block streams opened after it forever.
+     */
+open func onStreamClosed(streamId: String, identity: String)  {try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_incomingdatastreammanagerdelegate_on_stream_closed(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(streamId),
+        FfiConverterString.lower(identity),$0
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceIncomingDataStreamManagerDelegate {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceIncomingDataStreamManagerDelegate = UniffiVTableCallbackInterfaceIncomingDataStreamManagerDelegate(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeIncomingDataStreamManagerDelegate.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface IncomingDataStreamManagerDelegate: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeIncomingDataStreamManagerDelegate.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface IncomingDataStreamManagerDelegate: handle missing in uniffiClone")
+            }
+        },
+        onByteStreamOpened: { (
+            uniffiHandle: UInt64,
+            reader: UInt64,
+            identity: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeIncomingDataStreamManagerDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onByteStreamOpened(
+                     reader: try FfiConverterTypeByteStreamReader_lift(reader),
+                     identity: try FfiConverterString.lift(identity)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onTextStreamOpened: { (
+            uniffiHandle: UInt64,
+            reader: UInt64,
+            identity: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeIncomingDataStreamManagerDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onTextStreamOpened(
+                     reader: try FfiConverterTypeTextStreamReader_lift(reader),
+                     identity: try FfiConverterString.lift(identity)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onStreamClosed: { (
+            uniffiHandle: UInt64,
+            streamId: RustBuffer,
+            identity: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeIncomingDataStreamManagerDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onStreamClosed(
+                     streamId: try FfiConverterString.lift(streamId),
+                     identity: try FfiConverterString.lift(identity)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceIncomingDataStreamManagerDelegate> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceIncomingDataStreamManagerDelegate>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitIncomingDataStreamManagerDelegate() {
+    uniffi_livekit_uniffi_fn_init_callback_vtable_incomingdatastreammanagerdelegate(UniffiCallbackInterfaceIncomingDataStreamManagerDelegate.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeIncomingDataStreamManagerDelegate: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<IncomingDataStreamManagerDelegate>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = IncomingDataStreamManagerDelegate
+
+    public static func lift(_ handle: UInt64) throws -> IncomingDataStreamManagerDelegate {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return IncomingDataStreamManagerDelegateImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: IncomingDataStreamManagerDelegate) -> UInt64 {
+         if let rustImpl = value as? IncomingDataStreamManagerDelegateImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> IncomingDataStreamManagerDelegate {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: IncomingDataStreamManagerDelegate, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeIncomingDataStreamManagerDelegate_lift(_ handle: UInt64) throws -> IncomingDataStreamManagerDelegate {
+    return try FfiConverterTypeIncomingDataStreamManagerDelegate.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeIncomingDataStreamManagerDelegate_lower(_ value: IncomingDataStreamManagerDelegate) -> UInt64 {
+    return FfiConverterTypeIncomingDataStreamManagerDelegate.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Buffers opened and closed streams so they can be pulled instead of pushed.
+ *
+ * Implements [`IncomingDataStreamManagerDelegate`] in Rust; see the module docs.
+ */
+public protocol IncomingStreamQueueProtocol: AnyObject, Sendable {
+    
+    /**
+     * Wakes a pending [`Self::next_opened_stream`] or [`Self::next_closed_stream`] with `None`.
+     * See [`OutgoingPacketQueue::close`].
+     */
+    func close() 
+    
+    /**
+     * Awaits the next stream-closed notification.
+     *
+     * Pulled independently of [`Self::next_opened_stream`], so ordering across the two queues is
+     * not guaranteed — correlate by `stream_id` (a close always follows its open on the push
+     * side). Returns `None` once the manager has shut down.
+     */
+    func nextClosedStream() async  -> ClosedStream?
+    
+    /**
+     * Awaits the next stream opened by a remote participant.
+     *
+     * Returns `None` once the manager has shut down, which ends the caller's drain loop. Unlike
+     * [`OutgoingPacketQueue::next_packets`] this yields one at a time: each carries a reader the
+     * caller has to route to a handler, so batching would only defer that work.
+     */
+    func nextOpenedStream() async  -> OpenedStream?
+    
+}
+/**
+ * Buffers opened and closed streams so they can be pulled instead of pushed.
+ *
+ * Implements [`IncomingDataStreamManagerDelegate`] in Rust; see the module docs.
+ */
+open class IncomingStreamQueue: IncomingStreamQueueProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_livekit_uniffi_fn_clone_incomingstreamqueue(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_livekit_uniffi_fn_free_incomingstreamqueue(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Wakes a pending [`Self::next_opened_stream`] or [`Self::next_closed_stream`] with `None`.
+     * See [`OutgoingPacketQueue::close`].
+     */
+open func close()  {try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_incomingstreamqueue_close(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+    /**
+     * Awaits the next stream-closed notification.
+     *
+     * Pulled independently of [`Self::next_opened_stream`], so ordering across the two queues is
+     * not guaranteed — correlate by `stream_id` (a close always follows its open on the push
+     * side). Returns `None` once the manager has shut down.
+     */
+open func nextClosedStream()async  -> ClosedStream?  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_incomingstreamqueue_next_closed_stream(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionTypeClosedStream.lift,
+            errorHandler: nil
+            
+        )
+}
+    
+    /**
+     * Awaits the next stream opened by a remote participant.
+     *
+     * Returns `None` once the manager has shut down, which ends the caller's drain loop. Unlike
+     * [`OutgoingPacketQueue::next_packets`] this yields one at a time: each carries a reader the
+     * caller has to route to a handler, so batching would only defer that work.
+     */
+open func nextOpenedStream()async  -> OpenedStream?  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_incomingstreamqueue_next_opened_stream(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionTypeOpenedStream.lift,
+            errorHandler: nil
+            
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeIncomingStreamQueue: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = IncomingStreamQueue
+
+    public static func lift(_ handle: UInt64) throws -> IncomingStreamQueue {
+        return IncomingStreamQueue(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: IncomingStreamQueue) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> IncomingStreamQueue {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: IncomingStreamQueue, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeIncomingStreamQueue_lift(_ handle: UInt64) throws -> IncomingStreamQueue {
+    return try FfiConverterTypeIncomingStreamQueue.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeIncomingStreamQueue_lower(_ value: IncomingStreamQueue) -> UInt64 {
+    return FfiConverterTypeIncomingStreamQueue.lower(value)
 }
 
 
@@ -1402,6 +2591,674 @@ public func FfiConverterTypeLocalDataTrackManagerDelegate_lift(_ handle: UInt64)
 #endif
 public func FfiConverterTypeLocalDataTrackManagerDelegate_lower(_ value: LocalDataTrackManagerDelegate) -> UInt64 {
     return FfiConverterTypeLocalDataTrackManagerDelegate.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Sends data streams, choosing v2 single-packet/compression or legacy multi-packet framing based
+ * on recipient capabilities. Outbound packets are handed to a foreign delegate for transport.
+ */
+public protocol OutgoingDataStreamManagerProtocol: AnyObject, Sendable {
+    
+    /**
+     * Sends a complete byte payload, returning info about the created stream.
+     */
+    func sendBytes(data: Bytes, options: StreamByteOptions) async throws  -> ByteStreamInfo
+    
+    /**
+     * Streams a file from disk, returning info about the created stream.
+     */
+    func sendFile(path: String, options: StreamByteOptions) async throws  -> ByteStreamInfo
+    
+    /**
+     * Sends a complete text payload, returning info about the created stream.
+     */
+    func sendText(text: String, options: StreamTextOptions) async throws  -> TextStreamInfo
+    
+    /**
+     * Opens an incremental byte stream writer (never compressed or inlined).
+     */
+    func streamBytes(options: StreamByteOptions) async throws  -> ByteStreamWriter
+    
+    /**
+     * Opens an incremental text stream writer (never compressed or inlined).
+     */
+    func streamText(options: StreamTextOptions) async throws  -> TextStreamWriter
+    
+}
+/**
+ * Sends data streams, choosing v2 single-packet/compression or legacy multi-packet framing based
+ * on recipient capabilities. Outbound packets are handed to a foreign delegate for transport.
+ */
+open class OutgoingDataStreamManager: OutgoingDataStreamManagerProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_livekit_uniffi_fn_clone_outgoingdatastreammanager(self.handle, $0) }
+    }
+public convenience init(delegate: OutgoingDataStreamManagerDelegate, registry: RemoteParticipantRegistryDelegate) {
+    let handle =
+        try! rustCall() {
+    uniffi_livekit_uniffi_fn_constructor_outgoingdatastreammanager_new(
+        FfiConverterTypeOutgoingDataStreamManagerDelegate_lower(delegate),
+        FfiConverterTypeRemoteParticipantRegistryDelegate_lower(registry),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_livekit_uniffi_fn_free_outgoingdatastreammanager(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Sends a complete byte payload, returning info about the created stream.
+     */
+open func sendBytes(data: Bytes, options: StreamByteOptions)async throws  -> ByteStreamInfo  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_outgoingdatastreammanager_send_bytes(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeBytes_lower(data),FfiConverterTypeStreamByteOptions_lower(options)
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeByteStreamInfo_lift,
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+    /**
+     * Streams a file from disk, returning info about the created stream.
+     */
+open func sendFile(path: String, options: StreamByteOptions)async throws  -> ByteStreamInfo  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_outgoingdatastreammanager_send_file(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(path),FfiConverterTypeStreamByteOptions_lower(options)
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeByteStreamInfo_lift,
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+    /**
+     * Sends a complete text payload, returning info about the created stream.
+     */
+open func sendText(text: String, options: StreamTextOptions)async throws  -> TextStreamInfo  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_outgoingdatastreammanager_send_text(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(text),FfiConverterTypeStreamTextOptions_lower(options)
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTextStreamInfo_lift,
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+    /**
+     * Opens an incremental byte stream writer (never compressed or inlined).
+     */
+open func streamBytes(options: StreamByteOptions)async throws  -> ByteStreamWriter  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_outgoingdatastreammanager_stream_bytes(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeStreamByteOptions_lower(options)
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterTypeByteStreamWriter_lift,
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+    /**
+     * Opens an incremental text stream writer (never compressed or inlined).
+     */
+open func streamText(options: StreamTextOptions)async throws  -> TextStreamWriter  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_outgoingdatastreammanager_stream_text(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeStreamTextOptions_lower(options)
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterTypeTextStreamWriter_lift,
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOutgoingDataStreamManager: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = OutgoingDataStreamManager
+
+    public static func lift(_ handle: UInt64) throws -> OutgoingDataStreamManager {
+        return OutgoingDataStreamManager(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: OutgoingDataStreamManager) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OutgoingDataStreamManager {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: OutgoingDataStreamManager, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOutgoingDataStreamManager_lift(_ handle: UInt64) throws -> OutgoingDataStreamManager {
+    return try FfiConverterTypeOutgoingDataStreamManager.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOutgoingDataStreamManager_lower(_ value: OutgoingDataStreamManager) -> UInt64 {
+    return FfiConverterTypeOutgoingDataStreamManager.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Delegate for receiving outbound packets from [`OutgoingDataStreamManager`].
+ */
+public protocol OutgoingDataStreamManagerDelegate: AnyObject, Sendable {
+    
+    /**
+     * Encoded [`livekit_protocol::DataPacket`]s to be sent over the data channel transport, in
+     * order. One-shot sends (`send_text`/`send_bytes`) deliver their entire stream — header,
+     * chunks, trailer — in a single call; incremental writers and `send_file` deliver one packet
+     * per call.
+     *
+     * Return only once the packets have been handed to the transport: the originating
+     * `send_*`/`write` call stays pending until then, which is what bounds how fast a producer
+     * can enqueue. Throwing [`PacketDeliveryError`] fails that call with
+     * [`DataStreamError::SendFailed`](super::common::DataStreamError::SendFailed) and closes the
+     * affected stream (`is_open` becomes false for writers).
+     */
+    func onPacketsAvailable(packets: [Bytes]) async throws 
+    
+}
+/**
+ * Delegate for receiving outbound packets from [`OutgoingDataStreamManager`].
+ */
+open class OutgoingDataStreamManagerDelegateImpl: OutgoingDataStreamManagerDelegate, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_livekit_uniffi_fn_clone_outgoingdatastreammanagerdelegate(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_livekit_uniffi_fn_free_outgoingdatastreammanagerdelegate(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Encoded [`livekit_protocol::DataPacket`]s to be sent over the data channel transport, in
+     * order. One-shot sends (`send_text`/`send_bytes`) deliver their entire stream — header,
+     * chunks, trailer — in a single call; incremental writers and `send_file` deliver one packet
+     * per call.
+     *
+     * Return only once the packets have been handed to the transport: the originating
+     * `send_*`/`write` call stays pending until then, which is what bounds how fast a producer
+     * can enqueue. Throwing [`PacketDeliveryError`] fails that call with
+     * [`DataStreamError::SendFailed`](super::common::DataStreamError::SendFailed) and closes the
+     * affected stream (`is_open` becomes false for writers).
+     */
+open func onPacketsAvailable(packets: [Bytes])async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_outgoingdatastreammanagerdelegate_on_packets_available(
+                    self.uniffiCloneHandle(),
+                    FfiConverterSequenceTypeBytes.lower(packets)
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_void,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_void,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypePacketDeliveryError_lift
+        )
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceOutgoingDataStreamManagerDelegate {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceOutgoingDataStreamManagerDelegate = UniffiVTableCallbackInterfaceOutgoingDataStreamManagerDelegate(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeOutgoingDataStreamManagerDelegate.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface OutgoingDataStreamManagerDelegate: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeOutgoingDataStreamManagerDelegate.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface OutgoingDataStreamManagerDelegate: handle missing in uniffiClone")
+            }
+        },
+        onPacketsAvailable: { (
+            uniffiHandle: UInt64,
+            packets: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            let makeCall = {
+                () async throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeOutgoingDataStreamManagerDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.onPacketsAvailable(
+                     packets: try FfiConverterSequenceTypeBytes.lift(packets)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypePacketDeliveryError_lower,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceOutgoingDataStreamManagerDelegate> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceOutgoingDataStreamManagerDelegate>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitOutgoingDataStreamManagerDelegate() {
+    uniffi_livekit_uniffi_fn_init_callback_vtable_outgoingdatastreammanagerdelegate(UniffiCallbackInterfaceOutgoingDataStreamManagerDelegate.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOutgoingDataStreamManagerDelegate: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<OutgoingDataStreamManagerDelegate>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = OutgoingDataStreamManagerDelegate
+
+    public static func lift(_ handle: UInt64) throws -> OutgoingDataStreamManagerDelegate {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return OutgoingDataStreamManagerDelegateImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: OutgoingDataStreamManagerDelegate) -> UInt64 {
+         if let rustImpl = value as? OutgoingDataStreamManagerDelegateImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OutgoingDataStreamManagerDelegate {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: OutgoingDataStreamManagerDelegate, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOutgoingDataStreamManagerDelegate_lift(_ handle: UInt64) throws -> OutgoingDataStreamManagerDelegate {
+    return try FfiConverterTypeOutgoingDataStreamManagerDelegate.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOutgoingDataStreamManagerDelegate_lower(_ value: OutgoingDataStreamManagerDelegate) -> UInt64 {
+    return FfiConverterTypeOutgoingDataStreamManagerDelegate.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Buffers outbound packets so they can be pulled instead of pushed.
+ *
+ * Implements [`OutgoingDataStreamManagerDelegate`] in Rust; see the module docs.
+ */
+public protocol OutgoingPacketQueueProtocol: AnyObject, Sendable {
+    
+    /**
+     * Wakes a pending [`Self::next_packets`] with `None` so the caller's drain loop can exit.
+     *
+     * Call this before releasing the queue: a caller blocked in `next_packets` is holding a
+     * pointer to it, so freeing it first is a use-after-free.
+     */
+    func close() 
+    
+    /**
+     * Awaits the next batch of encoded `livekit.DataPacket`s to put on the wire.
+     *
+     * Returns `None` once the manager has shut down, which ends the caller's drain loop.
+     * Everything already queued is returned together, so a burst costs one FFI crossing rather
+     * than one per packet.
+     */
+    func nextPackets() async  -> [Bytes]?
+    
+}
+/**
+ * Buffers outbound packets so they can be pulled instead of pushed.
+ *
+ * Implements [`OutgoingDataStreamManagerDelegate`] in Rust; see the module docs.
+ */
+open class OutgoingPacketQueue: OutgoingPacketQueueProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_livekit_uniffi_fn_clone_outgoingpacketqueue(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_livekit_uniffi_fn_free_outgoingpacketqueue(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Wakes a pending [`Self::next_packets`] with `None` so the caller's drain loop can exit.
+     *
+     * Call this before releasing the queue: a caller blocked in `next_packets` is holding a
+     * pointer to it, so freeing it first is a use-after-free.
+     */
+open func close()  {try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_outgoingpacketqueue_close(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+    /**
+     * Awaits the next batch of encoded `livekit.DataPacket`s to put on the wire.
+     *
+     * Returns `None` once the manager has shut down, which ends the caller's drain loop.
+     * Everything already queued is returned together, so a burst costs one FFI crossing rather
+     * than one per packet.
+     */
+open func nextPackets()async  -> [Bytes]?  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_outgoingpacketqueue_next_packets(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionSequenceTypeBytes.lift,
+            errorHandler: nil
+            
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOutgoingPacketQueue: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = OutgoingPacketQueue
+
+    public static func lift(_ handle: UInt64) throws -> OutgoingPacketQueue {
+        return OutgoingPacketQueue(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: OutgoingPacketQueue) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OutgoingPacketQueue {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: OutgoingPacketQueue, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOutgoingPacketQueue_lift(_ handle: UInt64) throws -> OutgoingPacketQueue {
+    return try FfiConverterTypeOutgoingPacketQueue.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOutgoingPacketQueue_lower(_ value: OutgoingPacketQueue) -> UInt64 {
+    return FfiConverterTypeOutgoingPacketQueue.lower(value)
 }
 
 
@@ -2201,6 +4058,702 @@ public func FfiConverterTypeRemoteDataTrackManagerDelegate_lower(_ value: Remote
 
 
 
+
+
+/**
+ * Read access to remote participants' advertised protocol and capabilities, implemented by the
+ * foreign side. Mirrors [`lk_common::RemoteParticipantRegistry`]; used to decide inline/compression
+ * eligibility per send.
+ */
+public protocol RemoteParticipantRegistryDelegate: AnyObject, Sendable {
+    
+    /**
+     * A remote participant's `client_protocol`, or `0` (`CLIENT_PROTOCOL_DEFAULT`) if unknown.
+     */
+    func remoteClientProtocol(identity: String)  -> Int32
+    
+    /**
+     * A remote participant's advertised capabilities, or empty if unknown.
+     */
+    func remoteCapabilities(identity: String)  -> [ClientCapability]
+    
+    /**
+     * The identities of every remote participant, used to resolve a broadcast send.
+     */
+    func remoteIdentities()  -> [String]
+    
+}
+/**
+ * Read access to remote participants' advertised protocol and capabilities, implemented by the
+ * foreign side. Mirrors [`lk_common::RemoteParticipantRegistry`]; used to decide inline/compression
+ * eligibility per send.
+ */
+open class RemoteParticipantRegistryDelegateImpl: RemoteParticipantRegistryDelegate, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_livekit_uniffi_fn_clone_remoteparticipantregistrydelegate(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_livekit_uniffi_fn_free_remoteparticipantregistrydelegate(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * A remote participant's `client_protocol`, or `0` (`CLIENT_PROTOCOL_DEFAULT`) if unknown.
+     */
+open func remoteClientProtocol(identity: String) -> Int32  {
+    return try!  FfiConverterInt32.lift(try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_remoteparticipantregistrydelegate_remote_client_protocol(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(identity),$0
+    )
+})
+}
+    
+    /**
+     * A remote participant's advertised capabilities, or empty if unknown.
+     */
+open func remoteCapabilities(identity: String) -> [ClientCapability]  {
+    return try!  FfiConverterSequenceTypeClientCapability.lift(try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_remoteparticipantregistrydelegate_remote_capabilities(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(identity),$0
+    )
+})
+}
+    
+    /**
+     * The identities of every remote participant, used to resolve a broadcast send.
+     */
+open func remoteIdentities() -> [String]  {
+    return try!  FfiConverterSequenceString.lift(try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_remoteparticipantregistrydelegate_remote_identities(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceRemoteParticipantRegistryDelegate {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceRemoteParticipantRegistryDelegate = UniffiVTableCallbackInterfaceRemoteParticipantRegistryDelegate(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeRemoteParticipantRegistryDelegate.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface RemoteParticipantRegistryDelegate: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeRemoteParticipantRegistryDelegate.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface RemoteParticipantRegistryDelegate: handle missing in uniffiClone")
+            }
+        },
+        remoteClientProtocol: { (
+            uniffiHandle: UInt64,
+            identity: RustBuffer,
+            uniffiOutReturn: UnsafeMutablePointer<Int32>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> Int32 in
+                guard let uniffiObj = try? FfiConverterTypeRemoteParticipantRegistryDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.remoteClientProtocol(
+                     identity: try FfiConverterString.lift(identity)
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterInt32.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        remoteCapabilities: { (
+            uniffiHandle: UInt64,
+            identity: RustBuffer,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> [ClientCapability] in
+                guard let uniffiObj = try? FfiConverterTypeRemoteParticipantRegistryDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.remoteCapabilities(
+                     identity: try FfiConverterString.lift(identity)
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterSequenceTypeClientCapability.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        remoteIdentities: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> [String] in
+                guard let uniffiObj = try? FfiConverterTypeRemoteParticipantRegistryDelegate.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.remoteIdentities(
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterSequenceString.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceRemoteParticipantRegistryDelegate> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceRemoteParticipantRegistryDelegate>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitRemoteParticipantRegistryDelegate() {
+    uniffi_livekit_uniffi_fn_init_callback_vtable_remoteparticipantregistrydelegate(UniffiCallbackInterfaceRemoteParticipantRegistryDelegate.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRemoteParticipantRegistryDelegate: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<RemoteParticipantRegistryDelegate>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = RemoteParticipantRegistryDelegate
+
+    public static func lift(_ handle: UInt64) throws -> RemoteParticipantRegistryDelegate {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return RemoteParticipantRegistryDelegateImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: RemoteParticipantRegistryDelegate) -> UInt64 {
+         if let rustImpl = value as? RemoteParticipantRegistryDelegateImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RemoteParticipantRegistryDelegate {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: RemoteParticipantRegistryDelegate, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRemoteParticipantRegistryDelegate_lift(_ handle: UInt64) throws -> RemoteParticipantRegistryDelegate {
+    return try FfiConverterTypeRemoteParticipantRegistryDelegate.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRemoteParticipantRegistryDelegate_lower(_ value: RemoteParticipantRegistryDelegate) -> UInt64 {
+    return FfiConverterTypeRemoteParticipantRegistryDelegate.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Reader for an incoming text data stream.
+ */
+public protocol TextStreamReaderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Information about the underlying stream.
+     */
+    func info()  -> TextStreamInfo
+    
+    /**
+     * Returns the next chunk, or `None` once the stream has closed.
+     */
+    func next() async throws  -> String?
+    
+    /**
+     * Reads every chunk, concatenating them into a single string returned once the stream closes.
+     */
+    func readAll() async throws  -> String
+    
+}
+/**
+ * Reader for an incoming text data stream.
+ */
+open class TextStreamReader: TextStreamReaderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_livekit_uniffi_fn_clone_textstreamreader(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_livekit_uniffi_fn_free_textstreamreader(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Information about the underlying stream.
+     */
+open func info() -> TextStreamInfo  {
+    return try!  FfiConverterTypeTextStreamInfo_lift(try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_textstreamreader_info(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Returns the next chunk, or `None` once the stream has closed.
+     */
+open func next()async throws  -> String?  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_textstreamreader_next(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionString.lift,
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+    /**
+     * Reads every chunk, concatenating them into a single string returned once the stream closes.
+     */
+open func readAll()async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_textstreamreader_read_all(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTextStreamReader: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = TextStreamReader
+
+    public static func lift(_ handle: UInt64) throws -> TextStreamReader {
+        return TextStreamReader(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: TextStreamReader) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TextStreamReader {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: TextStreamReader, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTextStreamReader_lift(_ handle: UInt64) throws -> TextStreamReader {
+    return try FfiConverterTypeTextStreamReader.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTextStreamReader_lower(_ value: TextStreamReader) -> UInt64 {
+    return FfiConverterTypeTextStreamReader.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Writer for an open text data stream.
+ */
+public protocol TextStreamWriterProtocol: AnyObject, Sendable {
+    
+    /**
+     * Closes the stream normally.
+     */
+    func close() async throws 
+    
+    /**
+     * Closes the stream abnormally with a reason.
+     */
+    func closeWithReason(reason: String) async throws 
+    
+    /**
+     * Information about the underlying stream.
+     */
+    func info()  -> TextStreamInfo
+    
+    /**
+     * Whether the stream is still open — false once it has been closed locally or a send has failed.
+     */
+    func isOpen() async  -> Bool
+    
+    /**
+     * Appends text to the stream.
+     */
+    func write(text: String) async throws 
+    
+}
+/**
+ * Writer for an open text data stream.
+ */
+open class TextStreamWriter: TextStreamWriterProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_livekit_uniffi_fn_clone_textstreamwriter(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_livekit_uniffi_fn_free_textstreamwriter(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Closes the stream normally.
+     */
+open func close()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_textstreamwriter_close(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_void,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_void,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+    /**
+     * Closes the stream abnormally with a reason.
+     */
+open func closeWithReason(reason: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_textstreamwriter_close_with_reason(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(reason)
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_void,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_void,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+    /**
+     * Information about the underlying stream.
+     */
+open func info() -> TextStreamInfo  {
+    return try!  FfiConverterTypeTextStreamInfo_lift(try! rustCall() {
+    uniffi_livekit_uniffi_fn_method_textstreamwriter_info(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Whether the stream is still open — false once it has been closed locally or a send has failed.
+     */
+open func isOpen()async  -> Bool  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_textstreamwriter_is_open(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_i8,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_i8,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_i8,
+            liftFunc: FfiConverterBool.lift,
+            errorHandler: nil
+            
+        )
+}
+    
+    /**
+     * Appends text to the stream.
+     */
+open func write(text: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_livekit_uniffi_fn_method_textstreamwriter_write(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(text)
+                )
+            },
+            pollFunc: ffi_livekit_uniffi_rust_future_poll_void,
+            completeFunc: ffi_livekit_uniffi_rust_future_complete_void,
+            freeFunc: ffi_livekit_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeDataStreamError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTextStreamWriter: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = TextStreamWriter
+
+    public static func lift(_ handle: UInt64) throws -> TextStreamWriter {
+        return TextStreamWriter(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: TextStreamWriter) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TextStreamWriter {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: TextStreamWriter, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTextStreamWriter_lift(_ handle: UInt64) throws -> TextStreamWriter {
+    return try FfiConverterTypeTextStreamWriter.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTextStreamWriter_lower(_ value: TextStreamWriter) -> UInt64 {
+    return FfiConverterTypeTextStreamWriter.lower(value)
+}
+
+
+
+
 /**
  * API credentials for access token generation and verification.
  */
@@ -2255,6 +4808,93 @@ public func FfiConverterTypeApiCredentials_lift(_ buf: RustBuffer) throws -> Api
 #endif
 public func FfiConverterTypeApiCredentials_lower(_ value: ApiCredentials) -> RustBuffer {
     return FfiConverterTypeApiCredentials.lower(value)
+}
+
+
+/**
+ * Information about a byte data stream. FFI wrapper around [`ds_api::ByteStreamInfo`].
+ */
+public struct ByteStreamInfo: Equatable, Hashable {
+    public var id: String
+    public var topic: String
+    /**
+     * Unix timestamp in milliseconds.
+     */
+    public var timestampMs: Int64
+    public var totalLength: UInt64?
+    public var attributes: [String: String]
+    public var mimeType: String
+    public var name: String
+    public var encryptionType: EncryptionType
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, topic: String, 
+        /**
+         * Unix timestamp in milliseconds.
+         */timestampMs: Int64, totalLength: UInt64?, attributes: [String: String], mimeType: String, name: String, encryptionType: EncryptionType) {
+        self.id = id
+        self.topic = topic
+        self.timestampMs = timestampMs
+        self.totalLength = totalLength
+        self.attributes = attributes
+        self.mimeType = mimeType
+        self.name = name
+        self.encryptionType = encryptionType
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ByteStreamInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeByteStreamInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ByteStreamInfo {
+        return
+            try ByteStreamInfo(
+                id: FfiConverterString.read(from: &buf), 
+                topic: FfiConverterString.read(from: &buf), 
+                timestampMs: FfiConverterInt64.read(from: &buf), 
+                totalLength: FfiConverterOptionUInt64.read(from: &buf), 
+                attributes: FfiConverterDictionaryStringString.read(from: &buf), 
+                mimeType: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                encryptionType: FfiConverterTypeEncryptionType.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ByteStreamInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.topic, into: &buf)
+        FfiConverterInt64.write(value.timestampMs, into: &buf)
+        FfiConverterOptionUInt64.write(value.totalLength, into: &buf)
+        FfiConverterDictionaryStringString.write(value.attributes, into: &buf)
+        FfiConverterString.write(value.mimeType, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterTypeEncryptionType.write(value.encryptionType, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeByteStreamInfo_lift(_ buf: RustBuffer) throws -> ByteStreamInfo {
+    return try FfiConverterTypeByteStreamInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeByteStreamInfo_lower(_ value: ByteStreamInfo) -> RustBuffer {
+    return FfiConverterTypeByteStreamInfo.lower(value)
 }
 
 
@@ -2348,6 +4988,76 @@ public func FfiConverterTypeClaims_lift(_ buf: RustBuffer) throws -> Claims {
 #endif
 public func FfiConverterTypeClaims_lower(_ value: Claims) -> RustBuffer {
     return FfiConverterTypeClaims.lower(value)
+}
+
+
+/**
+ * A stream closed by a remote participant (or terminated by an error/abort); see
+ * [`IncomingDataStreamManagerDelegate::on_stream_closed`].
+ */
+public struct ClosedStream: Equatable, Hashable {
+    /**
+     * Id of the stream that closed.
+     */
+    public var streamId: String
+    /**
+     * Identity of the participant that opened the stream.
+     */
+    public var identity: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Id of the stream that closed.
+         */streamId: String, 
+        /**
+         * Identity of the participant that opened the stream.
+         */identity: String) {
+        self.streamId = streamId
+        self.identity = identity
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ClosedStream: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeClosedStream: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ClosedStream {
+        return
+            try ClosedStream(
+                streamId: FfiConverterString.read(from: &buf), 
+                identity: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ClosedStream, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.streamId, into: &buf)
+        FfiConverterString.write(value.identity, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeClosedStream_lift(_ buf: RustBuffer) throws -> ClosedStream {
+    return try FfiConverterTypeClosedStream.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeClosedStream_lower(_ value: ClosedStream) -> RustBuffer {
+    return FfiConverterTypeClosedStream.lower(value)
 }
 
 
@@ -2729,6 +5439,202 @@ public func FfiConverterTypeLogForwardEntry_lower(_ value: LogForwardEntry) -> R
 
 
 /**
+ * A stream opened by a remote participant.
+ *
+ * Exactly one of the two readers is set; which one tells you the stream's kind. Two `Option`s
+ * rather than an enum keeps the shape trivial in every binding.
+ */
+public struct OpenedStream {
+    /**
+     * Identity of the participant that opened the stream.
+     */
+    public var identity: String
+    /**
+     * Set when the stream carries bytes.
+     */
+    public var byteReader: ByteStreamReader?
+    /**
+     * Set when the stream carries text.
+     */
+    public var textReader: TextStreamReader?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Identity of the participant that opened the stream.
+         */identity: String, 
+        /**
+         * Set when the stream carries bytes.
+         */byteReader: ByteStreamReader?, 
+        /**
+         * Set when the stream carries text.
+         */textReader: TextStreamReader?) {
+        self.identity = identity
+        self.byteReader = byteReader
+        self.textReader = textReader
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension OpenedStream: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOpenedStream: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OpenedStream {
+        return
+            try OpenedStream(
+                identity: FfiConverterString.read(from: &buf), 
+                byteReader: FfiConverterOptionTypeByteStreamReader.read(from: &buf), 
+                textReader: FfiConverterOptionTypeTextStreamReader.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OpenedStream, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.identity, into: &buf)
+        FfiConverterOptionTypeByteStreamReader.write(value.byteReader, into: &buf)
+        FfiConverterOptionTypeTextStreamReader.write(value.textReader, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOpenedStream_lift(_ buf: RustBuffer) throws -> OpenedStream {
+    return try FfiConverterTypeOpenedStream.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOpenedStream_lower(_ value: OpenedStream) -> RustBuffer {
+    return FfiConverterTypeOpenedStream.lower(value)
+}
+
+
+/**
+ * An [`IncomingDataStreamManager`] and the queue draining it, already connected.
+ */
+public struct PolledIncomingDataStreamManager {
+    public var manager: IncomingDataStreamManager
+    public var streams: IncomingStreamQueue
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(manager: IncomingDataStreamManager, streams: IncomingStreamQueue) {
+        self.manager = manager
+        self.streams = streams
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension PolledIncomingDataStreamManager: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePolledIncomingDataStreamManager: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PolledIncomingDataStreamManager {
+        return
+            try PolledIncomingDataStreamManager(
+                manager: FfiConverterTypeIncomingDataStreamManager.read(from: &buf), 
+                streams: FfiConverterTypeIncomingStreamQueue.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PolledIncomingDataStreamManager, into buf: inout [UInt8]) {
+        FfiConverterTypeIncomingDataStreamManager.write(value.manager, into: &buf)
+        FfiConverterTypeIncomingStreamQueue.write(value.streams, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePolledIncomingDataStreamManager_lift(_ buf: RustBuffer) throws -> PolledIncomingDataStreamManager {
+    return try FfiConverterTypePolledIncomingDataStreamManager.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePolledIncomingDataStreamManager_lower(_ value: PolledIncomingDataStreamManager) -> RustBuffer {
+    return FfiConverterTypePolledIncomingDataStreamManager.lower(value)
+}
+
+
+/**
+ * An [`OutgoingDataStreamManager`] and the queue draining it, already connected.
+ */
+public struct PolledOutgoingDataStreamManager {
+    public var manager: OutgoingDataStreamManager
+    public var packets: OutgoingPacketQueue
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(manager: OutgoingDataStreamManager, packets: OutgoingPacketQueue) {
+        self.manager = manager
+        self.packets = packets
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension PolledOutgoingDataStreamManager: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePolledOutgoingDataStreamManager: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PolledOutgoingDataStreamManager {
+        return
+            try PolledOutgoingDataStreamManager(
+                manager: FfiConverterTypeOutgoingDataStreamManager.read(from: &buf), 
+                packets: FfiConverterTypeOutgoingPacketQueue.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PolledOutgoingDataStreamManager, into buf: inout [UInt8]) {
+        FfiConverterTypeOutgoingDataStreamManager.write(value.manager, into: &buf)
+        FfiConverterTypeOutgoingPacketQueue.write(value.packets, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePolledOutgoingDataStreamManager_lift(_ buf: RustBuffer) throws -> PolledOutgoingDataStreamManager {
+    return try FfiConverterTypePolledOutgoingDataStreamManager.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePolledOutgoingDataStreamManager_lower(_ value: PolledOutgoingDataStreamManager) -> RustBuffer {
+    return FfiConverterTypePolledOutgoingDataStreamManager.lower(value)
+}
+
+
+/**
  * FFI wrapper around [`livekit_datatrack::api::RemoteDataTrackPipelineOptions`]. The underlying
  * type uses the builder pattern with private fields.
 
@@ -3014,6 +5920,287 @@ public func FfiConverterTypeSIPGrants_lift(_ buf: RustBuffer) throws -> SipGrant
 #endif
 public func FfiConverterTypeSIPGrants_lower(_ value: SipGrants) -> RustBuffer {
     return FfiConverterTypeSIPGrants.lower(value)
+}
+
+
+/**
+ * Options for sending a byte stream. FFI wrapper around [`ds_api::StreamByteOptions`].
+ */
+public struct StreamByteOptions: Equatable, Hashable {
+    public var topic: String
+    public var attributes: [String: String]
+    public var destinationIdentities: [String]
+    public var id: String?
+    public var mimeType: String?
+    public var name: String?
+    public var totalLength: UInt64?
+    public var compress: Bool?
+    public var senderIdentity: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(topic: String, attributes: [String: String], destinationIdentities: [String] = [], id: String? = nil, mimeType: String? = nil, name: String? = nil, totalLength: UInt64? = nil, compress: Bool? = nil, senderIdentity: String? = nil) {
+        self.topic = topic
+        self.attributes = attributes
+        self.destinationIdentities = destinationIdentities
+        self.id = id
+        self.mimeType = mimeType
+        self.name = name
+        self.totalLength = totalLength
+        self.compress = compress
+        self.senderIdentity = senderIdentity
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension StreamByteOptions: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamByteOptions: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamByteOptions {
+        return
+            try StreamByteOptions(
+                topic: FfiConverterString.read(from: &buf), 
+                attributes: FfiConverterDictionaryStringString.read(from: &buf), 
+                destinationIdentities: FfiConverterSequenceString.read(from: &buf), 
+                id: FfiConverterOptionString.read(from: &buf), 
+                mimeType: FfiConverterOptionString.read(from: &buf), 
+                name: FfiConverterOptionString.read(from: &buf), 
+                totalLength: FfiConverterOptionUInt64.read(from: &buf), 
+                compress: FfiConverterOptionBool.read(from: &buf), 
+                senderIdentity: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StreamByteOptions, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.topic, into: &buf)
+        FfiConverterDictionaryStringString.write(value.attributes, into: &buf)
+        FfiConverterSequenceString.write(value.destinationIdentities, into: &buf)
+        FfiConverterOptionString.write(value.id, into: &buf)
+        FfiConverterOptionString.write(value.mimeType, into: &buf)
+        FfiConverterOptionString.write(value.name, into: &buf)
+        FfiConverterOptionUInt64.write(value.totalLength, into: &buf)
+        FfiConverterOptionBool.write(value.compress, into: &buf)
+        FfiConverterOptionString.write(value.senderIdentity, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamByteOptions_lift(_ buf: RustBuffer) throws -> StreamByteOptions {
+    return try FfiConverterTypeStreamByteOptions.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamByteOptions_lower(_ value: StreamByteOptions) -> RustBuffer {
+    return FfiConverterTypeStreamByteOptions.lower(value)
+}
+
+
+/**
+ * Options for sending a text stream. FFI wrapper around [`ds_api::StreamTextOptions`].
+ */
+public struct StreamTextOptions: Equatable, Hashable {
+    public var topic: String
+    public var attributes: [String: String]
+    public var destinationIdentities: [String]
+    public var id: String?
+    public var operationType: OperationType?
+    public var version: Int32?
+    public var replyToStreamId: String?
+    public var attachedStreamIds: [String]
+    public var generated: Bool?
+    public var compress: Bool?
+    public var senderIdentity: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(topic: String, attributes: [String: String], destinationIdentities: [String] = [], id: String? = nil, operationType: OperationType? = nil, version: Int32? = nil, replyToStreamId: String? = nil, attachedStreamIds: [String] = [], generated: Bool? = nil, compress: Bool? = nil, senderIdentity: String? = nil) {
+        self.topic = topic
+        self.attributes = attributes
+        self.destinationIdentities = destinationIdentities
+        self.id = id
+        self.operationType = operationType
+        self.version = version
+        self.replyToStreamId = replyToStreamId
+        self.attachedStreamIds = attachedStreamIds
+        self.generated = generated
+        self.compress = compress
+        self.senderIdentity = senderIdentity
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension StreamTextOptions: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStreamTextOptions: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StreamTextOptions {
+        return
+            try StreamTextOptions(
+                topic: FfiConverterString.read(from: &buf), 
+                attributes: FfiConverterDictionaryStringString.read(from: &buf), 
+                destinationIdentities: FfiConverterSequenceString.read(from: &buf), 
+                id: FfiConverterOptionString.read(from: &buf), 
+                operationType: FfiConverterOptionTypeOperationType.read(from: &buf), 
+                version: FfiConverterOptionInt32.read(from: &buf), 
+                replyToStreamId: FfiConverterOptionString.read(from: &buf), 
+                attachedStreamIds: FfiConverterSequenceString.read(from: &buf), 
+                generated: FfiConverterOptionBool.read(from: &buf), 
+                compress: FfiConverterOptionBool.read(from: &buf), 
+                senderIdentity: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StreamTextOptions, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.topic, into: &buf)
+        FfiConverterDictionaryStringString.write(value.attributes, into: &buf)
+        FfiConverterSequenceString.write(value.destinationIdentities, into: &buf)
+        FfiConverterOptionString.write(value.id, into: &buf)
+        FfiConverterOptionTypeOperationType.write(value.operationType, into: &buf)
+        FfiConverterOptionInt32.write(value.version, into: &buf)
+        FfiConverterOptionString.write(value.replyToStreamId, into: &buf)
+        FfiConverterSequenceString.write(value.attachedStreamIds, into: &buf)
+        FfiConverterOptionBool.write(value.generated, into: &buf)
+        FfiConverterOptionBool.write(value.compress, into: &buf)
+        FfiConverterOptionString.write(value.senderIdentity, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamTextOptions_lift(_ buf: RustBuffer) throws -> StreamTextOptions {
+    return try FfiConverterTypeStreamTextOptions.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStreamTextOptions_lower(_ value: StreamTextOptions) -> RustBuffer {
+    return FfiConverterTypeStreamTextOptions.lower(value)
+}
+
+
+/**
+ * Information about a text data stream. FFI wrapper around [`ds_api::TextStreamInfo`].
+ */
+public struct TextStreamInfo: Equatable, Hashable {
+    public var id: String
+    public var topic: String
+    /**
+     * Unix timestamp in milliseconds.
+     */
+    public var timestampMs: Int64
+    public var totalLength: UInt64?
+    public var attributes: [String: String]
+    public var mimeType: String
+    public var operationType: OperationType
+    public var version: Int32
+    public var replyToStreamId: String?
+    public var attachedStreamIds: [String]
+    public var generated: Bool
+    public var encryptionType: EncryptionType
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, topic: String, 
+        /**
+         * Unix timestamp in milliseconds.
+         */timestampMs: Int64, totalLength: UInt64?, attributes: [String: String], mimeType: String, operationType: OperationType, version: Int32, replyToStreamId: String?, attachedStreamIds: [String], generated: Bool, encryptionType: EncryptionType) {
+        self.id = id
+        self.topic = topic
+        self.timestampMs = timestampMs
+        self.totalLength = totalLength
+        self.attributes = attributes
+        self.mimeType = mimeType
+        self.operationType = operationType
+        self.version = version
+        self.replyToStreamId = replyToStreamId
+        self.attachedStreamIds = attachedStreamIds
+        self.generated = generated
+        self.encryptionType = encryptionType
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension TextStreamInfo: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTextStreamInfo: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TextStreamInfo {
+        return
+            try TextStreamInfo(
+                id: FfiConverterString.read(from: &buf), 
+                topic: FfiConverterString.read(from: &buf), 
+                timestampMs: FfiConverterInt64.read(from: &buf), 
+                totalLength: FfiConverterOptionUInt64.read(from: &buf), 
+                attributes: FfiConverterDictionaryStringString.read(from: &buf), 
+                mimeType: FfiConverterString.read(from: &buf), 
+                operationType: FfiConverterTypeOperationType.read(from: &buf), 
+                version: FfiConverterInt32.read(from: &buf), 
+                replyToStreamId: FfiConverterOptionString.read(from: &buf), 
+                attachedStreamIds: FfiConverterSequenceString.read(from: &buf), 
+                generated: FfiConverterBool.read(from: &buf), 
+                encryptionType: FfiConverterTypeEncryptionType.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TextStreamInfo, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.topic, into: &buf)
+        FfiConverterInt64.write(value.timestampMs, into: &buf)
+        FfiConverterOptionUInt64.write(value.totalLength, into: &buf)
+        FfiConverterDictionaryStringString.write(value.attributes, into: &buf)
+        FfiConverterString.write(value.mimeType, into: &buf)
+        FfiConverterTypeOperationType.write(value.operationType, into: &buf)
+        FfiConverterInt32.write(value.version, into: &buf)
+        FfiConverterOptionString.write(value.replyToStreamId, into: &buf)
+        FfiConverterSequenceString.write(value.attachedStreamIds, into: &buf)
+        FfiConverterBool.write(value.generated, into: &buf)
+        FfiConverterTypeEncryptionType.write(value.encryptionType, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTextStreamInfo_lift(_ buf: RustBuffer) throws -> TextStreamInfo {
+    return try FfiConverterTypeTextStreamInfo.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTextStreamInfo_lower(_ value: TextStreamInfo) -> RustBuffer {
+    return FfiConverterTypeTextStreamInfo.lower(value)
 }
 
 
@@ -3316,6 +6503,336 @@ public func FfiConverterTypeAccessTokenError_lower(_ value: AccessTokenError) ->
     return FfiConverterTypeAccessTokenError.lower(value)
 }
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * A capability a remote participant's client advertises, mirroring [`common::ClientCapability`].
+ */
+
+public enum ClientCapability: Equatable, Hashable {
+    
+    case unused
+    case packetTrailer
+    case compressionDeflateRaw
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension ClientCapability: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeClientCapability: FfiConverterRustBuffer {
+    typealias SwiftType = ClientCapability
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ClientCapability {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .unused
+        
+        case 2: return .packetTrailer
+        
+        case 3: return .compressionDeflateRaw
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ClientCapability, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .unused:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .packetTrailer:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .compressionDeflateRaw:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeClientCapability_lift(_ buf: RustBuffer) throws -> ClientCapability {
+    return try FfiConverterTypeClientCapability.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeClientCapability_lower(_ value: ClientCapability) -> RustBuffer {
+    return FfiConverterTypeClientCapability.lower(value)
+}
+
+
+
+/**
+ * A data stream operation failed. Structured mirror of [`ds_api::StreamError`] so foreign callers
+ * can map each case to their own error type; variants carrying a message forward it as `message`.
+ */
+public enum DataStreamError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
+
+    
+    
+    case AlreadyClosed
+    case AbnormalEnd(reason: String
+    )
+    case Utf8(reason: String
+    )
+    case InvalidHeader
+    case MissedChunk
+    case LengthExceeded
+    case Incomplete
+    case SendFailed
+    case Io(reason: String
+    )
+    case Internal
+    case EncryptionTypeMismatch(expected: EncryptionType, received: EncryptionType
+    )
+    case HeaderTooLarge
+    case PayloadTooLarge
+    case Decompression
+    case InvalidFileName
+
+    
+
+    
+
+    
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+    
+}
+
+#if compiler(>=6)
+extension DataStreamError: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDataStreamError: FfiConverterRustBuffer {
+    typealias SwiftType = DataStreamError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DataStreamError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        
+
+        
+        case 1: return .AlreadyClosed
+        case 2: return .AbnormalEnd(
+            reason: try FfiConverterString.read(from: &buf)
+            )
+        case 3: return .Utf8(
+            reason: try FfiConverterString.read(from: &buf)
+            )
+        case 4: return .InvalidHeader
+        case 5: return .MissedChunk
+        case 6: return .LengthExceeded
+        case 7: return .Incomplete
+        case 8: return .SendFailed
+        case 9: return .Io(
+            reason: try FfiConverterString.read(from: &buf)
+            )
+        case 10: return .Internal
+        case 11: return .EncryptionTypeMismatch(
+            expected: try FfiConverterTypeEncryptionType.read(from: &buf), 
+            received: try FfiConverterTypeEncryptionType.read(from: &buf)
+            )
+        case 12: return .HeaderTooLarge
+        case 13: return .PayloadTooLarge
+        case 14: return .Decompression
+        case 15: return .InvalidFileName
+
+         default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DataStreamError, into buf: inout [UInt8]) {
+        switch value {
+
+        
+
+        
+        
+        case .AlreadyClosed:
+            writeInt(&buf, Int32(1))
+        
+        
+        case let .AbnormalEnd(reason):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(reason, into: &buf)
+            
+        
+        case let .Utf8(reason):
+            writeInt(&buf, Int32(3))
+            FfiConverterString.write(reason, into: &buf)
+            
+        
+        case .InvalidHeader:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .MissedChunk:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .LengthExceeded:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .Incomplete:
+            writeInt(&buf, Int32(7))
+        
+        
+        case .SendFailed:
+            writeInt(&buf, Int32(8))
+        
+        
+        case let .Io(reason):
+            writeInt(&buf, Int32(9))
+            FfiConverterString.write(reason, into: &buf)
+            
+        
+        case .Internal:
+            writeInt(&buf, Int32(10))
+        
+        
+        case let .EncryptionTypeMismatch(expected,received):
+            writeInt(&buf, Int32(11))
+            FfiConverterTypeEncryptionType.write(expected, into: &buf)
+            FfiConverterTypeEncryptionType.write(received, into: &buf)
+            
+        
+        case .HeaderTooLarge:
+            writeInt(&buf, Int32(12))
+        
+        
+        case .PayloadTooLarge:
+            writeInt(&buf, Int32(13))
+        
+        
+        case .Decompression:
+            writeInt(&buf, Int32(14))
+        
+        
+        case .InvalidFileName:
+            writeInt(&buf, Int32(15))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDataStreamError_lift(_ buf: RustBuffer) throws -> DataStreamError {
+    return try FfiConverterTypeDataStreamError.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDataStreamError_lower(_ value: DataStreamError) -> RustBuffer {
+    return FfiConverterTypeDataStreamError.lower(value)
+}
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Encryption applied to a data stream, mirroring [`common::EncryptionType`].
+ */
+
+public enum EncryptionType: Equatable, Hashable {
+    
+    case none
+    case gcm
+    case custom
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension EncryptionType: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEncryptionType: FfiConverterRustBuffer {
+    typealias SwiftType = EncryptionType
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EncryptionType {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .none
+        
+        case 2: return .gcm
+        
+        case 3: return .custom
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: EncryptionType, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .none:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .gcm:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .custom:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEncryptionType_lift(_ buf: RustBuffer) throws -> EncryptionType {
+    return try FfiConverterTypeEncryptionType.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEncryptionType_lower(_ value: EncryptionType) -> RustBuffer {
+    return FfiConverterTypeEncryptionType.lower(value)
+}
+
+
 
 /**
  * Signal response crossing the FFI boundary could not be processed.
@@ -3600,6 +7117,171 @@ public func FfiConverterTypeLogForwardLevel_lower(_ value: LogForwardLevel) -> R
 }
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Operation type for text streams, mirroring [`ds_api::OperationType`].
+ */
+
+public enum OperationType: Equatable, Hashable {
+    
+    case create
+    case update
+    case delete
+    case reaction
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension OperationType: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOperationType: FfiConverterRustBuffer {
+    typealias SwiftType = OperationType
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OperationType {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .create
+        
+        case 2: return .update
+        
+        case 3: return .delete
+        
+        case 4: return .reaction
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OperationType, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .create:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .update:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .delete:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .reaction:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOperationType_lift(_ buf: RustBuffer) throws -> OperationType {
+    return try FfiConverterTypeOperationType.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOperationType_lower(_ value: OperationType) -> RustBuffer {
+    return FfiConverterTypeOperationType.lower(value)
+}
+
+
+
+/**
+ * A foreign transport failed to deliver outbound packets; thrown by hosts from
+ * [`OutgoingDataStreamManagerDelegate::on_packets_available`](super::outgoing::OutgoingDataStreamManagerDelegate::on_packets_available).
+ *
+ * Morally `struct PacketDeliveryError(String)`, but uniffi error types must be enums, so the
+ * string travels as the single variant's `reason` (free-form host context: logged, not parsed).
+ */
+public enum PacketDeliveryError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
+
+    
+    
+    case Failed(reason: String
+    )
+
+    
+
+    
+
+    
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+    
+}
+
+#if compiler(>=6)
+extension PacketDeliveryError: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePacketDeliveryError: FfiConverterRustBuffer {
+    typealias SwiftType = PacketDeliveryError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PacketDeliveryError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        
+
+        
+        case 1: return .Failed(
+            reason: try FfiConverterString.read(from: &buf)
+            )
+
+         default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: PacketDeliveryError, into buf: inout [UInt8]) {
+        switch value {
+
+        
+
+        
+        
+        case let .Failed(reason):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(reason, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePacketDeliveryError_lift(_ buf: RustBuffer) throws -> PacketDeliveryError {
+    return try FfiConverterTypePacketDeliveryError.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePacketDeliveryError_lower(_ value: PacketDeliveryError) -> RustBuffer {
+    return FfiConverterTypePacketDeliveryError.lower(value)
+}
+
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
@@ -3627,6 +7309,30 @@ fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionInt32: FfiConverterRustBuffer {
+    typealias SwiftType = Int32?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterInt32.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterInt32.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
     typealias SwiftType = UInt64?
 
@@ -3643,6 +7349,30 @@ fileprivate struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterUInt64.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionBool: FfiConverterRustBuffer {
+    typealias SwiftType = Bool?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterBool.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterBool.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -3747,6 +7477,54 @@ fileprivate struct FfiConverterOptionTypeEncryptionProvider: FfiConverterRustBuf
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeByteStreamReader: FfiConverterRustBuffer {
+    typealias SwiftType = ByteStreamReader?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeByteStreamReader.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeByteStreamReader.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeTextStreamReader: FfiConverterRustBuffer {
+    typealias SwiftType = TextStreamReader?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeTextStreamReader.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeTextStreamReader.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeApiCredentials: FfiConverterRustBuffer {
     typealias SwiftType = ApiCredentials?
 
@@ -3763,6 +7541,30 @@ fileprivate struct FfiConverterOptionTypeApiCredentials: FfiConverterRustBuffer 
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeApiCredentials.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeClosedStream: FfiConverterRustBuffer {
+    typealias SwiftType = ClosedStream?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeClosedStream.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeClosedStream.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -3835,6 +7637,30 @@ fileprivate struct FfiConverterOptionTypeLogForwardEntry: FfiConverterRustBuffer
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeLogForwardEntry.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeOpenedStream: FfiConverterRustBuffer {
+    typealias SwiftType = OpenedStream?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeOpenedStream.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeOpenedStream.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -3939,6 +7765,54 @@ fileprivate struct FfiConverterOptionTypeDataTrackFrameEncoding: FfiConverterRus
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeOperationType: FfiConverterRustBuffer {
+    typealias SwiftType = OperationType?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeOperationType.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeOperationType.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionSequenceTypeBytes: FfiConverterRustBuffer {
+    typealias SwiftType = [Bytes]?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterSequenceTypeBytes.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterSequenceTypeBytes.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionDictionaryStringString: FfiConverterRustBuffer {
     typealias SwiftType = [String: String]?
 
@@ -3955,6 +7829,30 @@ fileprivate struct FfiConverterOptionDictionaryStringString: FfiConverterRustBuf
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterDictionaryStringString.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeBytes: FfiConverterRustBuffer {
+    typealias SwiftType = Bytes?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeBytes.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeBytes.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -4005,6 +7903,31 @@ fileprivate struct FfiConverterSequenceTypeRoomAgentDispatch: FfiConverterRustBu
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeRoomAgentDispatch.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeClientCapability: FfiConverterRustBuffer {
+    typealias SwiftType = [ClientCapability]
+
+    public static func write(_ value: [ClientCapability], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeClientCapability.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ClientCapability] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ClientCapability]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeClientCapability.read(from: &buf))
         }
         return seq
     }
@@ -4152,6 +8075,96 @@ fileprivate func uniffiFutureContinuationCallback(handle: UInt64, pollResult: In
         print("uniffiFutureContinuationCallback invalid handle")
     }
 }
+private func uniffiTraitInterfaceCallAsync<T>(
+    makeCall: @escaping () async throws -> T,
+    handleSuccess: @escaping (T) -> (),
+    handleError: @escaping (Int8, RustBuffer) -> (),
+    droppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+) {
+    let task = Task {
+        // Note: it's important we call either `handleSuccess` or `handleError` exactly once.  Each
+        // call consumes an Arc reference, which means there should be no possibility of a double
+        // call.  The following code is structured so that will will never call both `handleSuccess`
+        // and `handleError`, even in the face of weird errors.
+        //
+        // On platforms that need extra machinery to make C-ABI calls, like JNA or ctypes, it's
+        // possible that we fail to make either call.  However, it doesn't seem like this is
+        // possible on Swift since swift can just make the C call directly.
+        var callResult: T
+        do {
+            callResult = try await makeCall()
+        } catch {
+            handleError(CALL_UNEXPECTED_ERROR, FfiConverterString.lower(String(describing: error)))
+            return
+        }
+        handleSuccess(callResult)
+    }
+    let handle = UNIFFI_FOREIGN_FUTURE_HANDLE_MAP.insert(obj: task)
+    droppedCallback.pointee = UniffiForeignFutureDroppedCallbackStruct(
+        handle: handle,
+        free: uniffiForeignFutureDroppedCallback
+    )
+}
+
+private func uniffiTraitInterfaceCallAsyncWithError<T, E>(
+    makeCall: @escaping () async throws -> T,
+    handleSuccess: @escaping (T) -> (),
+    handleError: @escaping (Int8, RustBuffer) -> (),
+    lowerError: @escaping (E) -> RustBuffer,
+    droppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+) {
+    let task = Task {
+        // See the note in uniffiTraitInterfaceCallAsync for details on `handleSuccess` and
+        // `handleError`.
+        var callResult: T
+        do {
+            callResult = try await makeCall()
+        } catch let error as E {
+            handleError(CALL_ERROR, lowerError(error))
+            return
+        } catch {
+            handleError(CALL_UNEXPECTED_ERROR, FfiConverterString.lower(String(describing: error)))
+            return
+        }
+        handleSuccess(callResult)
+    }
+    let handle = UNIFFI_FOREIGN_FUTURE_HANDLE_MAP.insert(obj: task)
+    droppedCallback.pointee = UniffiForeignFutureDroppedCallbackStruct(
+        handle: handle,
+        free: uniffiForeignFutureDroppedCallback
+    )
+}
+
+// Borrow the callback handle map implementation to store foreign future handles
+// TODO: consolidate the handle-map code (https://github.com/mozilla/uniffi-rs/pull/1823)
+fileprivate let UNIFFI_FOREIGN_FUTURE_HANDLE_MAP = UniffiHandleMap<UniffiForeignFutureTask>()
+
+// Protocol for tasks that handle foreign futures.
+//
+// Defining a protocol allows all tasks to be stored in the same handle map.  This can't be done
+// with the task object itself, since has generic parameters.
+fileprivate protocol UniffiForeignFutureTask {
+    func cancel()
+}
+
+extension Task: UniffiForeignFutureTask {}
+
+private func uniffiForeignFutureDroppedCallback(handle: UInt64) {
+    do {
+        let task = try UNIFFI_FOREIGN_FUTURE_HANDLE_MAP.remove(handle: handle)
+        // Set the cancellation flag on the task.  If it's still running, the code can check the
+        // cancellation flag or call `Task.checkCancellation()`.  If the task has completed, this is
+        // a no-op.
+        task.cancel()
+    } catch {
+        print("uniffiForeignFutureDroppedCallback: handle missing from handlemap")
+    }
+}
+
+// For testing
+public func uniffiForeignFutureHandleCountLivekitUniffi() -> Int {
+    UNIFFI_FOREIGN_FUTURE_HANDLE_MAP.count
+}
 /**
  * Parses an access token without verifying its signature.
  *
@@ -4203,6 +8216,34 @@ public func tokenVerify(token: String, credentials: ApiCredentials?)throws  -> C
 public func buildVersion() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_livekit_uniffi_fn_func_build_version($0
+    )
+})
+}
+/**
+ * Builds an incoming manager whose opened streams are pulled rather than pushed.
+ *
+ * `max_payload_byte_length` is fixed for the lifetime of the manager; see
+ * [`IncomingDataStreamManager::new`]. Hosts sourcing it from per-connection options should build
+ * a fresh manager per session rather than memoizing one.
+ */
+public func polledIncomingDataStreamManager(maxPayloadByteLength: UInt64?) -> PolledIncomingDataStreamManager  {
+    return try!  FfiConverterTypePolledIncomingDataStreamManager_lift(try! rustCall() {
+    uniffi_livekit_uniffi_fn_func_polled_incoming_data_stream_manager(
+        FfiConverterOptionUInt64.lower(maxPayloadByteLength),$0
+    )
+})
+}
+/**
+ * Builds an outgoing manager whose packets are pulled rather than pushed.
+ *
+ * The two halves are wired together here rather than by the caller: passing a Rust object where
+ * `Arc<dyn OutgoingDataStreamManagerDelegate>` is expected is awkward-to-impossible from some
+ * bindings, and unnecessary — it's ordinary Rust on this side.
+ */
+public func polledOutgoingDataStreamManager(registry: RemoteParticipantRegistryDelegate) -> PolledOutgoingDataStreamManager  {
+    return try!  FfiConverterTypePolledOutgoingDataStreamManager_lift(try! rustCall() {
+    uniffi_livekit_uniffi_fn_func_polled_outgoing_data_stream_manager(
+        FfiConverterTypeRemoteParticipantRegistryDelegate_lower(registry),$0
     )
 })
 }
@@ -4270,10 +8311,127 @@ private let initializationResult: InitializationResult = {
     if (uniffi_livekit_uniffi_checksum_func_build_version() != 21480) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_livekit_uniffi_checksum_func_polled_incoming_data_stream_manager() != 59681) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_func_polled_outgoing_data_stream_manager() != 16176) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_livekit_uniffi_checksum_func_log_forward_bootstrap() != 25458) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_livekit_uniffi_checksum_func_log_forward_receive() != 58503) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_bytestreamreader_info() != 10285) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_bytestreamreader_next() != 62806) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_bytestreamreader_read_all() != 8858) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_incomingdatastreammanager_abort_all_streams() != 37772) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_incomingdatastreammanager_abort_streams_from() != 27277) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_incomingdatastreammanager_handle_packet_received() != 28698) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_incomingdatastreammanager_open_stream_count() != 51052) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_incomingdatastreammanagerdelegate_on_byte_stream_opened() != 16413) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_incomingdatastreammanagerdelegate_on_text_stream_opened() != 64529) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_incomingdatastreammanagerdelegate_on_stream_closed() != 35314) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_textstreamreader_info() != 6861) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_textstreamreader_next() != 56274) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_textstreamreader_read_all() != 26313) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_bytestreamwriter_close() != 39404) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_bytestreamwriter_close_with_reason() != 54863) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_bytestreamwriter_info() != 5482) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_bytestreamwriter_is_open() != 18526) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_bytestreamwriter_write() != 51985) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_outgoingdatastreammanager_send_bytes() != 36743) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_outgoingdatastreammanager_send_file() != 17211) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_outgoingdatastreammanager_send_text() != 44627) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_outgoingdatastreammanager_stream_bytes() != 17761) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_outgoingdatastreammanager_stream_text() != 34690) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_outgoingdatastreammanagerdelegate_on_packets_available() != 2572) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_remoteparticipantregistrydelegate_remote_client_protocol() != 48134) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_remoteparticipantregistrydelegate_remote_capabilities() != 2201) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_remoteparticipantregistrydelegate_remote_identities() != 42803) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_textstreamwriter_close() != 43279) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_textstreamwriter_close_with_reason() != 39023) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_textstreamwriter_info() != 27425) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_textstreamwriter_is_open() != 24885) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_textstreamwriter_write() != 50876) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_incomingstreamqueue_close() != 4954) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_incomingstreamqueue_next_closed_stream() != 10337) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_incomingstreamqueue_next_opened_stream() != 44884) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_outgoingpacketqueue_close() != 35032) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_method_outgoingpacketqueue_next_packets() != 15206) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_livekit_uniffi_checksum_method_localdatatrack_info() != 60151) {
@@ -4360,6 +8518,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_livekit_uniffi_checksum_method_remotedatatrackmanagerdelegate_on_track_unpublished() != 204) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_livekit_uniffi_checksum_constructor_incomingdatastreammanager_new() != 27033) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_livekit_uniffi_checksum_constructor_outgoingdatastreammanager_new() != 53243) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_livekit_uniffi_checksum_constructor_localdatatrackmanager_new() != 49140) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -4367,8 +8531,11 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
 
+    uniffiCallbackInitIncomingDataStreamManagerDelegate()
     uniffiCallbackInitLocalDataTrackManagerDelegate()
+    uniffiCallbackInitOutgoingDataStreamManagerDelegate()
     uniffiCallbackInitRemoteDataTrackManagerDelegate()
+    uniffiCallbackInitRemoteParticipantRegistryDelegate()
     uniffiEnsureLivekitCommonInitialized()
     uniffiEnsureLivekitDatatrackInitialized()
     return InitializationResult.ok
