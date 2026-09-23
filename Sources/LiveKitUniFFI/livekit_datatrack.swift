@@ -1434,8 +1434,8 @@ public enum DecryptionError: Swift.Error, Equatable, Hashable, Foundation.Locali
 
     
     
-    case Failed(message: String)
-    
+    case Failed(reason: String
+    )
 
     
 
@@ -1466,11 +1466,10 @@ public struct FfiConverterTypeDecryptionError: FfiConverterRustBuffer {
 
         
         case 1: return .Failed(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+            reason: try FfiConverterString.read(from: &buf)
+            )
 
-        default: throw UniffiInternalError.unexpectedEnumCase
+         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
@@ -1480,10 +1479,11 @@ public struct FfiConverterTypeDecryptionError: FfiConverterRustBuffer {
         
 
         
-        case .Failed(_ /* message is ignored*/):
-            writeInt(&buf, Int32(1))
-
         
+        case let .Failed(reason):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(reason, into: &buf)
+            
         }
     }
 }
@@ -1511,8 +1511,8 @@ public enum EncryptionError: Swift.Error, Equatable, Hashable, Foundation.Locali
 
     
     
-    case Failed(message: String)
-    
+    case Failed(reason: String
+    )
 
     
 
@@ -1543,11 +1543,10 @@ public struct FfiConverterTypeEncryptionError: FfiConverterRustBuffer {
 
         
         case 1: return .Failed(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+            reason: try FfiConverterString.read(from: &buf)
+            )
 
-        default: throw UniffiInternalError.unexpectedEnumCase
+         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
@@ -1557,10 +1556,11 @@ public struct FfiConverterTypeEncryptionError: FfiConverterRustBuffer {
         
 
         
-        case .Failed(_ /* message is ignored*/):
-            writeInt(&buf, Int32(1))
-
         
+        case let .Failed(reason):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(reason, into: &buf)
+            
         }
     }
 }

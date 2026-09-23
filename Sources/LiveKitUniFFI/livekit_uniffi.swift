@@ -4907,6 +4907,7 @@ public struct Claims: Equatable, Hashable {
     public var nbf: UInt64
     public var sub: String
     public var name: String
+    public var kind: String
     public var video: VideoGrants
     public var sip: SipGrants
     public var sha256: String
@@ -4916,12 +4917,13 @@ public struct Claims: Equatable, Hashable {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(exp: UInt64, iss: String, nbf: UInt64, sub: String, name: String, video: VideoGrants, sip: SipGrants, sha256: String, metadata: String, attributes: [String: String], roomConfiguration: RoomConfiguration?) {
+    public init(exp: UInt64, iss: String, nbf: UInt64, sub: String, name: String, kind: String, video: VideoGrants, sip: SipGrants, sha256: String, metadata: String, attributes: [String: String], roomConfiguration: RoomConfiguration?) {
         self.exp = exp
         self.iss = iss
         self.nbf = nbf
         self.sub = sub
         self.name = name
+        self.kind = kind
         self.video = video
         self.sip = sip
         self.sha256 = sha256
@@ -4951,6 +4953,7 @@ public struct FfiConverterTypeClaims: FfiConverterRustBuffer {
                 nbf: FfiConverterUInt64.read(from: &buf), 
                 sub: FfiConverterString.read(from: &buf), 
                 name: FfiConverterString.read(from: &buf), 
+                kind: FfiConverterString.read(from: &buf), 
                 video: FfiConverterTypeVideoGrants.read(from: &buf), 
                 sip: FfiConverterTypeSIPGrants.read(from: &buf), 
                 sha256: FfiConverterString.read(from: &buf), 
@@ -4966,6 +4969,7 @@ public struct FfiConverterTypeClaims: FfiConverterRustBuffer {
         FfiConverterUInt64.write(value.nbf, into: &buf)
         FfiConverterString.write(value.sub, into: &buf)
         FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.kind, into: &buf)
         FfiConverterTypeVideoGrants.write(value.video, into: &buf)
         FfiConverterTypeSIPGrants.write(value.sip, into: &buf)
         FfiConverterString.write(value.sha256, into: &buf)
@@ -6216,6 +6220,7 @@ public struct TokenOptions: Equatable, Hashable {
     public var sipGrants: SipGrants?
     public var identity: String?
     public var name: String?
+    public var kind: String?
     public var metadata: String?
     public var attributes: [String: String]?
     public var sha256: String?
@@ -6223,12 +6228,13 @@ public struct TokenOptions: Equatable, Hashable {
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(ttl: TimeInterval? = nil, videoGrants: VideoGrants? = nil, sipGrants: SipGrants? = nil, identity: String? = nil, name: String? = nil, metadata: String? = nil, attributes: [String: String]? = nil, sha256: String? = nil, roomConfiguration: RoomConfiguration? = nil) {
+    public init(ttl: TimeInterval? = nil, videoGrants: VideoGrants? = nil, sipGrants: SipGrants? = nil, identity: String? = nil, name: String? = nil, kind: String? = nil, metadata: String? = nil, attributes: [String: String]? = nil, sha256: String? = nil, roomConfiguration: RoomConfiguration? = nil) {
         self.ttl = ttl
         self.videoGrants = videoGrants
         self.sipGrants = sipGrants
         self.identity = identity
         self.name = name
+        self.kind = kind
         self.metadata = metadata
         self.attributes = attributes
         self.sha256 = sha256
@@ -6256,6 +6262,7 @@ public struct FfiConverterTypeTokenOptions: FfiConverterRustBuffer {
                 sipGrants: FfiConverterOptionTypeSIPGrants.read(from: &buf), 
                 identity: FfiConverterOptionString.read(from: &buf), 
                 name: FfiConverterOptionString.read(from: &buf), 
+                kind: FfiConverterOptionString.read(from: &buf), 
                 metadata: FfiConverterOptionString.read(from: &buf), 
                 attributes: FfiConverterOptionDictionaryStringString.read(from: &buf), 
                 sha256: FfiConverterOptionString.read(from: &buf), 
@@ -6269,6 +6276,7 @@ public struct FfiConverterTypeTokenOptions: FfiConverterRustBuffer {
         FfiConverterOptionTypeSIPGrants.write(value.sipGrants, into: &buf)
         FfiConverterOptionString.write(value.identity, into: &buf)
         FfiConverterOptionString.write(value.name, into: &buf)
+        FfiConverterOptionString.write(value.kind, into: &buf)
         FfiConverterOptionString.write(value.metadata, into: &buf)
         FfiConverterOptionDictionaryStringString.write(value.attributes, into: &buf)
         FfiConverterOptionString.write(value.sha256, into: &buf)
@@ -6305,18 +6313,19 @@ public struct VideoGrants: Equatable, Hashable {
     public var roomJoin: Bool
     public var room: String
     public var destinationRoom: String
-    public var canPublish: Bool
-    public var canSubscribe: Bool
-    public var canPublishData: Bool
+    public var canPublish: Bool?
+    public var canSubscribe: Bool?
+    public var canPublishData: Bool?
     public var canPublishSources: [String]
-    public var canUpdateOwnMetadata: Bool
+    public var canUpdateOwnMetadata: Bool?
     public var ingressAdmin: Bool
     public var hidden: Bool
     public var recorder: Bool
+    public var agent: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(roomCreate: Bool, roomList: Bool, roomRecord: Bool, roomAdmin: Bool, roomJoin: Bool, room: String, destinationRoom: String, canPublish: Bool, canSubscribe: Bool, canPublishData: Bool, canPublishSources: [String], canUpdateOwnMetadata: Bool, ingressAdmin: Bool, hidden: Bool, recorder: Bool) {
+    public init(roomCreate: Bool, roomList: Bool, roomRecord: Bool, roomAdmin: Bool, roomJoin: Bool, room: String, destinationRoom: String, canPublish: Bool?, canSubscribe: Bool?, canPublishData: Bool?, canPublishSources: [String], canUpdateOwnMetadata: Bool?, ingressAdmin: Bool, hidden: Bool, recorder: Bool, agent: Bool) {
         self.roomCreate = roomCreate
         self.roomList = roomList
         self.roomRecord = roomRecord
@@ -6332,6 +6341,7 @@ public struct VideoGrants: Equatable, Hashable {
         self.ingressAdmin = ingressAdmin
         self.hidden = hidden
         self.recorder = recorder
+        self.agent = agent
     }
 
     
@@ -6357,14 +6367,15 @@ public struct FfiConverterTypeVideoGrants: FfiConverterRustBuffer {
                 roomJoin: FfiConverterBool.read(from: &buf), 
                 room: FfiConverterString.read(from: &buf), 
                 destinationRoom: FfiConverterString.read(from: &buf), 
-                canPublish: FfiConverterBool.read(from: &buf), 
-                canSubscribe: FfiConverterBool.read(from: &buf), 
-                canPublishData: FfiConverterBool.read(from: &buf), 
+                canPublish: FfiConverterOptionBool.read(from: &buf), 
+                canSubscribe: FfiConverterOptionBool.read(from: &buf), 
+                canPublishData: FfiConverterOptionBool.read(from: &buf), 
                 canPublishSources: FfiConverterSequenceString.read(from: &buf), 
-                canUpdateOwnMetadata: FfiConverterBool.read(from: &buf), 
+                canUpdateOwnMetadata: FfiConverterOptionBool.read(from: &buf), 
                 ingressAdmin: FfiConverterBool.read(from: &buf), 
                 hidden: FfiConverterBool.read(from: &buf), 
-                recorder: FfiConverterBool.read(from: &buf)
+                recorder: FfiConverterBool.read(from: &buf), 
+                agent: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -6376,14 +6387,15 @@ public struct FfiConverterTypeVideoGrants: FfiConverterRustBuffer {
         FfiConverterBool.write(value.roomJoin, into: &buf)
         FfiConverterString.write(value.room, into: &buf)
         FfiConverterString.write(value.destinationRoom, into: &buf)
-        FfiConverterBool.write(value.canPublish, into: &buf)
-        FfiConverterBool.write(value.canSubscribe, into: &buf)
-        FfiConverterBool.write(value.canPublishData, into: &buf)
+        FfiConverterOptionBool.write(value.canPublish, into: &buf)
+        FfiConverterOptionBool.write(value.canSubscribe, into: &buf)
+        FfiConverterOptionBool.write(value.canPublishData, into: &buf)
         FfiConverterSequenceString.write(value.canPublishSources, into: &buf)
-        FfiConverterBool.write(value.canUpdateOwnMetadata, into: &buf)
+        FfiConverterOptionBool.write(value.canUpdateOwnMetadata, into: &buf)
         FfiConverterBool.write(value.ingressAdmin, into: &buf)
         FfiConverterBool.write(value.hidden, into: &buf)
         FfiConverterBool.write(value.recorder, into: &buf)
+        FfiConverterBool.write(value.agent, into: &buf)
     }
 }
 
