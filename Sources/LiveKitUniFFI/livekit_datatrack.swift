@@ -8,11 +8,11 @@ import Foundation
 // might be in a separate module, or it might be compiled inline into
 // this module. This is a bit of light hackery to work with both.
 #if canImport(RustLiveKitUniFFI)
-import RustLiveKitUniFFI
+    import RustLiveKitUniFFI
 #endif
 
-fileprivate extension RustBuffer {
-    // Allocate a new buffer, copying the contents of a `UInt8` array.
+private extension RustBuffer {
+    /// Allocate a new buffer, copying the contents of a `UInt8` array.
     init(bytes: [UInt8]) {
         let rbuf = bytes.withUnsafeBufferPointer { ptr in
             RustBuffer.from(ptr)
@@ -21,21 +21,21 @@ fileprivate extension RustBuffer {
     }
 
     static func empty() -> RustBuffer {
-        RustBuffer(capacity: 0, len:0, data: nil)
+        RustBuffer(capacity: 0, len: 0, data: nil)
     }
 
     static func from(_ ptr: UnsafeBufferPointer<UInt8>) -> RustBuffer {
         try! rustCall { ffi_livekit_datatrack_rustbuffer_from_bytes(ForeignBytes(bufferPointer: ptr), $0) }
     }
 
-    // Frees the buffer in place.
-    // The buffer must not be used after this is called.
+    /// Frees the buffer in place.
+    /// The buffer must not be used after this is called.
     func deallocate() {
         try! rustCall { ffi_livekit_datatrack_rustbuffer_free(self, $0) }
     }
 }
 
-fileprivate extension ForeignBytes {
+private extension ForeignBytes {
     init(bufferPointer: UnsafeBufferPointer<UInt8>) {
         self.init(len: Int32(bufferPointer.count), data: bufferPointer.baseAddress)
     }
@@ -48,7 +48,7 @@ fileprivate extension ForeignBytes {
 // Helper classes/extensions that don't change.
 // Someday, this will be in a library of its own.
 
-fileprivate extension Data {
+private extension Data {
     init(rustBuffer: RustBuffer) {
         self.init(
             bytesNoCopy: rustBuffer.data!,
@@ -72,15 +72,15 @@ fileprivate extension Data {
 //
 // Instead, the read() method and these helper functions input a tuple of data
 
-fileprivate func createReader(data: Data) -> (data: Data, offset: Data.Index) {
+private func createReader(data: Data) -> (data: Data, offset: Data.Index) {
     (data: data, offset: 0)
 }
 
-// Reads an integer at the current offset, in big-endian order, and advances
-// the offset on success. Throws if reading the integer would move the
-// offset past the end of the buffer.
-fileprivate func readInt<T: FixedWidthInteger>(_ reader: inout (data: Data, offset: Data.Index)) throws -> T {
-    let range = reader.offset..<reader.offset + MemoryLayout<T>.size
+/// Reads an integer at the current offset, in big-endian order, and advances
+/// the offset on success. Throws if reading the integer would move the
+/// offset past the end of the buffer.
+private func readInt<T: FixedWidthInteger>(_ reader: inout (data: Data, offset: Data.Index)) throws -> T {
+    let range = reader.offset ..< reader.offset + MemoryLayout<T>.size
     guard reader.data.count >= range.upperBound else {
         throw UniffiInternalError.bufferOverflow
     }
@@ -90,73 +90,73 @@ fileprivate func readInt<T: FixedWidthInteger>(_ reader: inout (data: Data, offs
         return value as! T
     }
     var value: T = 0
-    let _ = withUnsafeMutableBytes(of: &value, { reader.data.copyBytes(to: $0, from: range)})
+    let _ = withUnsafeMutableBytes(of: &value) { reader.data.copyBytes(to: $0, from: range) }
     reader.offset = range.upperBound
     return value.bigEndian
 }
 
-// Reads an arbitrary number of bytes, to be used to read
-// raw bytes, this is useful when lifting strings
-fileprivate func readBytes(_ reader: inout (data: Data, offset: Data.Index), count: Int) throws -> Array<UInt8> {
-    let range = reader.offset..<(reader.offset+count)
+/// Reads an arbitrary number of bytes, to be used to read
+/// raw bytes, this is useful when lifting strings
+private func readBytes(_ reader: inout (data: Data, offset: Data.Index), count: Int) throws -> [UInt8] {
+    let range = reader.offset ..< (reader.offset + count)
     guard reader.data.count >= range.upperBound else {
         throw UniffiInternalError.bufferOverflow
     }
     var value = [UInt8](repeating: 0, count: count)
-    value.withUnsafeMutableBufferPointer({ buffer in
+    value.withUnsafeMutableBufferPointer { buffer in
         reader.data.copyBytes(to: buffer, from: range)
-    })
+    }
     reader.offset = range.upperBound
     return value
 }
 
-// Reads a float at the current offset.
-fileprivate func readFloat(_ reader: inout (data: Data, offset: Data.Index)) throws -> Float {
-    return Float(bitPattern: try readInt(&reader))
+/// Reads a float at the current offset.
+private func readFloat(_ reader: inout (data: Data, offset: Data.Index)) throws -> Float {
+    try Float(bitPattern: readInt(&reader))
 }
 
-// Reads a float at the current offset.
-fileprivate func readDouble(_ reader: inout (data: Data, offset: Data.Index)) throws -> Double {
-    return Double(bitPattern: try readInt(&reader))
+/// Reads a float at the current offset.
+private func readDouble(_ reader: inout (data: Data, offset: Data.Index)) throws -> Double {
+    try Double(bitPattern: readInt(&reader))
 }
 
-// Indicates if the offset has reached the end of the buffer.
-fileprivate func hasRemaining(_ reader: (data: Data, offset: Data.Index)) -> Bool {
-    return reader.offset < reader.data.count
+/// Indicates if the offset has reached the end of the buffer.
+private func hasRemaining(_ reader: (data: Data, offset: Data.Index)) -> Bool {
+    reader.offset < reader.data.count
 }
 
 // Define writer functionality.  Normally this would be defined in a class or
 // struct, but we use standalone functions instead in order to make external
 // types work.  See the above discussion on Readers for details.
 
-fileprivate func createWriter() -> [UInt8] {
-    return []
+private func createWriter() -> [UInt8] {
+    []
 }
 
-fileprivate func writeBytes<S>(_ writer: inout [UInt8], _ byteArr: S) where S: Sequence, S.Element == UInt8 {
+private func writeBytes(_ writer: inout [UInt8], _ byteArr: some Sequence<UInt8>) {
     writer.append(contentsOf: byteArr)
 }
 
-// Writes an integer in big-endian order.
-//
-// Warning: make sure what you are trying to write
-// is in the correct type!
-fileprivate func writeInt<T: FixedWidthInteger>(_ writer: inout [UInt8], _ value: T) {
+/// Writes an integer in big-endian order.
+///
+/// Warning: make sure what you are trying to write
+/// is in the correct type!
+private func writeInt(_ writer: inout [UInt8], _ value: some FixedWidthInteger) {
     var value = value.bigEndian
     withUnsafeBytes(of: &value) { writer.append(contentsOf: $0) }
 }
 
-fileprivate func writeFloat(_ writer: inout [UInt8], _ value: Float) {
+private func writeFloat(_ writer: inout [UInt8], _ value: Float) {
     writeInt(&writer, value.bitPattern)
 }
 
-fileprivate func writeDouble(_ writer: inout [UInt8], _ value: Double) {
+private func writeDouble(_ writer: inout [UInt8], _ value: Double) {
     writeInt(&writer, value.bitPattern)
 }
 
-// Protocol for types that transfer other types across the FFI. This is
-// analogous to the Rust trait of the same name.
-fileprivate protocol FfiConverter {
+/// Protocol for types that transfer other types across the FFI. This is
+/// analogous to the Rust trait of the same name.
+private protocol FfiConverter {
     associatedtype FfiType
     associatedtype SwiftType
 
@@ -166,33 +166,33 @@ fileprivate protocol FfiConverter {
     static func write(_ value: SwiftType, into buf: inout [UInt8])
 }
 
-// Types conforming to `Primitive` pass themselves directly over the FFI.
-fileprivate protocol FfiConverterPrimitive: FfiConverter where FfiType == SwiftType { }
+/// Types conforming to `Primitive` pass themselves directly over the FFI.
+private protocol FfiConverterPrimitive: FfiConverter where FfiType == SwiftType {}
 
 extension FfiConverterPrimitive {
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public static func lift(_ value: FfiType) throws -> SwiftType {
-        return value
+        value
     }
 
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public static func lower(_ value: SwiftType) -> FfiType {
-        return value
+        value
     }
 }
 
-// Types conforming to `FfiConverterRustBuffer` lift and lower into a `RustBuffer`.
-// Used for complex types where it's hard to write a custom lift/lower.
-fileprivate protocol FfiConverterRustBuffer: FfiConverter where FfiType == RustBuffer {}
+/// Types conforming to `FfiConverterRustBuffer` lift and lower into a `RustBuffer`.
+/// Used for complex types where it's hard to write a custom lift/lower.
+private protocol FfiConverterRustBuffer: FfiConverter where FfiType == RustBuffer {}
 
 extension FfiConverterRustBuffer {
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public static func lift(_ buf: RustBuffer) throws -> SwiftType {
         var reader = createReader(data: Data(rustBuffer: buf))
         let value = try read(from: &reader)
@@ -203,18 +203,19 @@ extension FfiConverterRustBuffer {
         return value
     }
 
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public static func lower(_ value: SwiftType) -> RustBuffer {
-          var writer = createWriter()
-          write(value, into: &writer)
-          return RustBuffer(bytes: writer)
+        var writer = createWriter()
+        write(value, into: &writer)
+        return RustBuffer(bytes: writer)
     }
 }
-// An error type for FFI errors. These errors occur at the UniFFI level, not
-// the library level.
-fileprivate enum UniffiInternalError: LocalizedError {
+
+/// An error type for FFI errors. These errors occur at the UniFFI level, not
+/// the library level.
+private enum UniffiInternalError: LocalizedError {
     case bufferOverflow
     case incompleteData
     case unexpectedOptionalTag
@@ -225,39 +226,39 @@ fileprivate enum UniffiInternalError: LocalizedError {
     case unexpectedStaleHandle
     case rustPanic(_ message: String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
-        case .bufferOverflow: return "Reading the requested value would read past the end of the buffer"
-        case .incompleteData: return "The buffer still has data after lifting its containing value"
-        case .unexpectedOptionalTag: return "Unexpected optional tag; should be 0 or 1"
-        case .unexpectedEnumCase: return "Raw enum value doesn't match any cases"
-        case .unexpectedNullPointer: return "Raw pointer value was null"
-        case .unexpectedRustCallStatusCode: return "Unexpected RustCallStatus code"
-        case .unexpectedRustCallError: return "CALL_ERROR but no errorClass specified"
-        case .unexpectedStaleHandle: return "The object in the handle map has been dropped already"
-        case let .rustPanic(message): return message
+        case .bufferOverflow: "Reading the requested value would read past the end of the buffer"
+        case .incompleteData: "The buffer still has data after lifting its containing value"
+        case .unexpectedOptionalTag: "Unexpected optional tag; should be 0 or 1"
+        case .unexpectedEnumCase: "Raw enum value doesn't match any cases"
+        case .unexpectedNullPointer: "Raw pointer value was null"
+        case .unexpectedRustCallStatusCode: "Unexpected RustCallStatus code"
+        case .unexpectedRustCallError: "CALL_ERROR but no errorClass specified"
+        case .unexpectedStaleHandle: "The object in the handle map has been dropped already"
+        case let .rustPanic(message): message
         }
     }
 }
 
-fileprivate extension NSLock {
+private extension NSLock {
     func withLock<T>(f: () throws -> T) rethrows -> T {
-        self.lock()
+        lock()
         defer { self.unlock() }
         return try f()
     }
 }
 
-fileprivate let CALL_SUCCESS: Int8 = 0
-fileprivate let CALL_ERROR: Int8 = 1
-fileprivate let CALL_UNEXPECTED_ERROR: Int8 = 2
-fileprivate let CALL_CANCELLED: Int8 = 3
+private let CALL_SUCCESS: Int8 = 0
+private let CALL_ERROR: Int8 = 1
+private let CALL_UNEXPECTED_ERROR: Int8 = 2
+private let CALL_CANCELLED: Int8 = 3
 
-fileprivate extension RustCallStatus {
+private extension RustCallStatus {
     init() {
         self.init(
             code: CALL_SUCCESS,
-            errorBuf: RustBuffer.init(
+            errorBuf: RustBuffer(
                 capacity: 0,
                 len: 0,
                 data: nil
@@ -271,66 +272,67 @@ private func rustCall<T>(_ callback: (UnsafeMutablePointer<RustCallStatus>) -> T
     return try makeRustCall(callback, errorHandler: neverThrow)
 }
 
-private func rustCallWithError<T, E: Swift.Error>(
-    _ errorHandler: @escaping (RustBuffer) throws -> E,
-    _ callback: (UnsafeMutablePointer<RustCallStatus>) -> T) throws -> T {
+private func rustCallWithError<T>(
+    _ errorHandler: @escaping (RustBuffer) throws -> some Swift.Error,
+    _ callback: (UnsafeMutablePointer<RustCallStatus>) -> T
+) throws -> T {
     try makeRustCall(callback, errorHandler: errorHandler)
 }
 
-private func makeRustCall<T, E: Swift.Error>(
+private func makeRustCall<T>(
     _ callback: (UnsafeMutablePointer<RustCallStatus>) -> T,
-    errorHandler: ((RustBuffer) throws -> E)?
+    errorHandler: ((RustBuffer) throws -> some Swift.Error)?
 ) throws -> T {
     uniffiEnsureLivekitDatatrackInitialized()
-    var callStatus = RustCallStatus.init()
+    var callStatus = RustCallStatus()
     let returnedVal = callback(&callStatus)
     try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: errorHandler)
     return returnedVal
 }
 
-private func uniffiCheckCallStatus<E: Swift.Error>(
+private func uniffiCheckCallStatus(
     callStatus: RustCallStatus,
-    errorHandler: ((RustBuffer) throws -> E)?
+    errorHandler: ((RustBuffer) throws -> some Swift.Error)?
 ) throws {
     switch callStatus.code {
-        case CALL_SUCCESS:
-            return
+    case CALL_SUCCESS:
+        return
 
-        case CALL_ERROR:
-            if let errorHandler = errorHandler {
-                throw try errorHandler(callStatus.errorBuf)
-            } else {
-                callStatus.errorBuf.deallocate()
-                throw UniffiInternalError.unexpectedRustCallError
-            }
+    case CALL_ERROR:
+        if let errorHandler {
+            throw try errorHandler(callStatus.errorBuf)
+        } else {
+            callStatus.errorBuf.deallocate()
+            throw UniffiInternalError.unexpectedRustCallError
+        }
 
-        case CALL_UNEXPECTED_ERROR:
-            // When the rust code sees a panic, it tries to construct a RustBuffer
-            // with the message.  But if that code panics, then it just sends back
-            // an empty buffer.
-            if callStatus.errorBuf.len > 0 {
-                throw UniffiInternalError.rustPanic(try FfiConverterString.lift(callStatus.errorBuf))
-            } else {
-                callStatus.errorBuf.deallocate()
-                throw UniffiInternalError.rustPanic("Rust panic")
-            }
+    case CALL_UNEXPECTED_ERROR:
+        // When the rust code sees a panic, it tries to construct a RustBuffer
+        // with the message.  But if that code panics, then it just sends back
+        // an empty buffer.
+        if callStatus.errorBuf.len > 0 {
+            throw try UniffiInternalError.rustPanic(FfiConverterString.lift(callStatus.errorBuf))
+        } else {
+            callStatus.errorBuf.deallocate()
+            throw UniffiInternalError.rustPanic("Rust panic")
+        }
 
-        case CALL_CANCELLED:
-            fatalError("Cancellation not supported yet")
+    case CALL_CANCELLED:
+        fatalError("Cancellation not supported yet")
 
-        default:
-            throw UniffiInternalError.unexpectedRustCallStatusCode
+    default:
+        throw UniffiInternalError.unexpectedRustCallStatusCode
     }
 }
 
 private func uniffiTraitInterfaceCall<T>(
     callStatus: UnsafeMutablePointer<RustCallStatus>,
     makeCall: () throws -> T,
-    writeReturn: (T) -> ()
+    writeReturn: (T) -> Void
 ) {
     do {
         try writeReturn(makeCall())
-    } catch let error {
+    } catch {
         callStatus.pointee.code = CALL_UNEXPECTED_ERROR
         callStatus.pointee.errorBuf = FfiConverterString.lower(String(describing: error))
     }
@@ -339,7 +341,7 @@ private func uniffiTraitInterfaceCall<T>(
 private func uniffiTraitInterfaceCallWithError<T, E>(
     callStatus: UnsafeMutablePointer<RustCallStatus>,
     makeCall: () throws -> T,
-    writeReturn: (T) -> (),
+    writeReturn: (T) -> Void,
     lowerError: (E) -> RustBuffer
 ) {
     do {
@@ -352,12 +354,13 @@ private func uniffiTraitInterfaceCallWithError<T, E>(
         callStatus.pointee.errorBuf = FfiConverterString.lower(String(describing: error))
     }
 }
-// Initial value and increment amount for handles. 
-// These ensure that SWIFT handles always have the lowest bit set
-fileprivate let UNIFFI_HANDLEMAP_INITIAL: UInt64 = 1
-fileprivate let UNIFFI_HANDLEMAP_DELTA: UInt64 = 2
 
-fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
+// Initial value and increment amount for handles.
+// These ensure that SWIFT handles always have the lowest bit set
+private let UNIFFI_HANDLEMAP_INITIAL: UInt64 = 1
+private let UNIFFI_HANDLEMAP_DELTA: UInt64 = 2
+
+private final class UniffiHandleMap<T>: @unchecked Sendable {
     // All mutation happens with this lock held, which is why we implement @unchecked Sendable.
     private let lock = NSLock()
     private var map: [UInt64: T] = [:]
@@ -365,11 +368,11 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
 
     func insert(obj: T) -> UInt64 {
         lock.withLock {
-            return doInsert(obj)
+            doInsert(obj)
         }
     }
 
-    // Low-level insert function, this assumes `lock` is held.
+    /// Low-level insert function, this assumes `lock` is held.
     private func doInsert(_ obj: T) -> UInt64 {
         let handle = currentHandle
         currentHandle += UNIFFI_HANDLEMAP_DELTA
@@ -377,7 +380,7 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
         return handle
     }
 
-     func get(handle: UInt64) throws -> T {
+    func get(handle: UInt64) throws -> T {
         try lock.withLock {
             guard let obj = map[handle] else {
                 throw UniffiInternalError.unexpectedStaleHandle
@@ -386,7 +389,7 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
         }
     }
 
-     func clone(handle: UInt64) throws -> UInt64 {
+    func clone(handle: UInt64) throws -> UInt64 {
         try lock.withLock {
             guard let obj = map[handle] else {
                 throw UniffiInternalError.unexpectedStaleHandle
@@ -406,16 +409,13 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
     }
 
     var count: Int {
-        get {
-            map.count
-        }
+        map.count
     }
 }
 
-
-// Public interface members begin here.
-// Magic number for the Rust proxy to call using the same mechanism as every other method,
-// to free the callback once it's dropped by Rust.
+/// Public interface members begin here.
+/// Magic number for the Rust proxy to call using the same mechanism as every other method,
+/// to free the callback once it's dropped by Rust.
 private let IDX_CALLBACK_FREE: Int32 = 0
 // Callback return codes
 private let UNIFFI_CALLBACK_SUCCESS: Int32 = 0
@@ -423,29 +423,29 @@ private let UNIFFI_CALLBACK_ERROR: Int32 = 1
 private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterUInt8: FfiConverterPrimitive {
+private struct FfiConverterUInt8: FfiConverterPrimitive {
     typealias FfiType = UInt8
     typealias SwiftType = UInt8
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt8 {
-        return try lift(readInt(&buf))
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt8 {
+        try lift(readInt(&buf))
     }
 
-    public static func write(_ value: UInt8, into buf: inout [UInt8]) {
+    static func write(_ value: UInt8, into buf: inout [UInt8]) {
         writeInt(&buf, lower(value))
     }
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterString: FfiConverter {
+private struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
     typealias FfiType = RustBuffer
 
-    public static func lift(_ value: RustBuffer) throws -> String {
+    static func lift(_ value: RustBuffer) throws -> String {
         defer {
             value.deallocate()
         }
@@ -456,8 +456,8 @@ fileprivate struct FfiConverterString: FfiConverter {
         return String(bytes: bytes, encoding: String.Encoding.utf8)!
     }
 
-    public static func lower(_ value: String) -> RustBuffer {
-        return value.utf8CString.withUnsafeBufferPointer { ptr in
+    static func lower(_ value: String) -> RustBuffer {
+        value.utf8CString.withUnsafeBufferPointer { ptr in
             // The swift string gives us int8_t, we want uint8_t.
             ptr.withMemoryRebound(to: UInt8.self) { ptr in
                 // The swift string gives us a trailing null byte, we don't want it.
@@ -467,12 +467,12 @@ fileprivate struct FfiConverterString: FfiConverter {
         }
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> String {
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> String {
         let len: Int32 = try readInt(&buf)
-        return String(bytes: try readBytes(&buf, count: Int(len)), encoding: String.Encoding.utf8)!
+        return try String(bytes: readBytes(&buf, count: Int(len)), encoding: String.Encoding.utf8)!
     }
 
-    public static func write(_ value: String, into buf: inout [UInt8]) {
+    static func write(_ value: String, into buf: inout [UInt8]) {
         let len = Int32(value.utf8.count)
         writeInt(&buf, len)
         writeBytes(&buf, value.utf8)
@@ -480,31 +480,27 @@ fileprivate struct FfiConverterString: FfiConverter {
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterData: FfiConverterRustBuffer {
+private struct FfiConverterData: FfiConverterRustBuffer {
     typealias SwiftType = Data
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
         let len: Int32 = try readInt(&buf)
-        return Data(try readBytes(&buf, count: Int(len)))
+        return try Data(readBytes(&buf, count: Int(len)))
     }
 
-    public static func write(_ value: Data, into buf: inout [UInt8]) {
+    static func write(_ value: Data, into buf: inout [UInt8]) {
         let len = Int32(value.count)
         writeInt(&buf, len)
         writeBytes(&buf, value)
     }
 }
 
-
-
-
 /**
  * Provider for decrypting payloads for E2EE.
  */
 public protocol DecryptionProvider: AnyObject, Sendable {
-    
     /**
      * Decrypts the given payload received from a remote participant.
      *
@@ -512,19 +508,19 @@ public protocol DecryptionProvider: AnyObject, Sendable {
      * for decryption.
 
      */
-    func decrypt(payload: EncryptedPayload, senderIdentity: String) throws  -> Bytes
-    
+    func decrypt(payload: EncryptedPayload, senderIdentity: String) throws -> Bytes
 }
+
 /**
  * Provider for decrypting payloads for E2EE.
  */
 open class DecryptionProviderImpl: DecryptionProvider, @unchecked Sendable {
     fileprivate let handle: UInt64
 
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    // Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public struct NoHandle {
         public init() {}
     }
@@ -532,10 +528,10 @@ open class DecryptionProviderImpl: DecryptionProvider, @unchecked Sendable {
     // TODO: We'd like this to be `private` but for Swifty reasons,
     // we can't implement `FfiConverter` without making this `required` and we can't
     // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromHandle handle: UInt64) {
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public required init(unsafeFromHandle handle: UInt64) {
         self.handle = handle
     }
 
@@ -544,19 +540,20 @@ open class DecryptionProviderImpl: DecryptionProvider, @unchecked Sendable {
     //
     // - Warning:
     //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public init(noHandle _: NoHandle) {
+        handle = 0
     }
 
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_livekit_datatrack_fn_clone_decryptionprovider(self.handle, $0) }
+        try! rustCall { uniffi_livekit_datatrack_fn_clone_decryptionprovider(self.handle, $0) }
     }
+
     // No primary constructor declared for this class.
 
     deinit {
@@ -568,9 +565,6 @@ open class DecryptionProviderImpl: DecryptionProvider, @unchecked Sendable {
         try! rustCall { uniffi_livekit_datatrack_fn_free_decryptionprovider(handle, $0) }
     }
 
-    
-
-    
     /**
      * Decrypts the given payload received from a remote participant.
      *
@@ -578,31 +572,25 @@ open class DecryptionProviderImpl: DecryptionProvider, @unchecked Sendable {
      * for decryption.
 
      */
-open func decrypt(payload: EncryptedPayload, senderIdentity: String)throws  -> Bytes  {
-    return try  FfiConverterTypeBytes_lift(try rustCallWithError(FfiConverterTypeDecryptionError_lift) {
-    uniffi_livekit_datatrack_fn_method_decryptionprovider_decrypt(
-            self.uniffiCloneHandle(),
-        FfiConverterTypeEncryptedPayload_lower(payload),
-        FfiConverterString.lower(senderIdentity),$0
-    )
-})
-}
-    
-
-    
+    open func decrypt(payload: EncryptedPayload, senderIdentity: String) throws -> Bytes {
+        try FfiConverterTypeBytes_lift(rustCallWithError(FfiConverterTypeDecryptionError_lift) {
+            uniffi_livekit_datatrack_fn_method_decryptionprovider_decrypt(
+                self.uniffiCloneHandle(),
+                FfiConverterTypeEncryptedPayload_lower(payload),
+                FfiConverterString.lower(senderIdentity), $0
+            )
+        })
+    }
 }
 
-
-
-// Put the implementation in a struct so we don't pollute the top-level namespace
-fileprivate struct UniffiCallbackInterfaceDecryptionProvider {
-
-    // Create the VTable using a series of closures.
-    // Swift automatically converts these into C callback functions.
-    //
-    // Store the vtable directly.
-    static let vtable: UniffiVTableCallbackInterfaceDecryptionProvider = UniffiVTableCallbackInterfaceDecryptionProvider(
-        uniffiFree: { (uniffiHandle: UInt64) -> () in
+/// Put the implementation in a struct so we don't pollute the top-level namespace
+private enum UniffiCallbackInterfaceDecryptionProvider {
+    /// Create the VTable using a series of closures.
+    /// Swift automatically converts these into C callback functions.
+    ///
+    /// Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceDecryptionProvider = .init(
+        uniffiFree: { (uniffiHandle: UInt64) in
             do {
                 try FfiConverterTypeDecryptionProvider.handleMap.remove(handle: uniffiHandle)
             } catch {
@@ -629,12 +617,11 @@ fileprivate struct UniffiCallbackInterfaceDecryptionProvider {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
                 return try uniffiObj.decrypt(
-                     payload: try FfiConverterTypeEncryptedPayload_lift(payload),
-                     senderIdentity: try FfiConverterString.lift(senderIdentity)
+                    payload: FfiConverterTypeEncryptedPayload_lift(payload),
+                    senderIdentity: FfiConverterString.lift(senderIdentity)
                 )
             }
 
-            
             let writeReturn = { uniffiOutReturn.pointee = FfiConverterTypeBytes_lower($0) }
             uniffiTraitInterfaceCallWithError(
                 callStatus: uniffiCallStatus,
@@ -645,8 +632,8 @@ fileprivate struct UniffiCallbackInterfaceDecryptionProvider {
         }
     )
 
-    // Rust stores this pointer for future callback invocations, so it must live
-    // for the process lifetime (not just for the init function call).
+    /// Rust stores this pointer for future callback invocations, so it must live
+    /// for the process lifetime (not just for the init function call).
     static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceDecryptionProvider> = {
         let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceDecryptionProvider>.allocate(capacity: 1)
         ptr.initialize(to: vtable)
@@ -659,7 +646,7 @@ private func uniffiCallbackInitDecryptionProvider() {
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeDecryptionProvider: FfiConverter {
     fileprivate static let handleMap = UniffiHandleMap<DecryptionProvider>()
@@ -668,24 +655,24 @@ public struct FfiConverterTypeDecryptionProvider: FfiConverter {
     typealias SwiftType = DecryptionProvider
 
     public static func lift(_ handle: UInt64) throws -> DecryptionProvider {
-        if ((handle & 1) == 0) {
+        if (handle & 1) == 0 {
             // Rust-generated handle, construct a new class that uses the handle to implement the
             // interface
-            return DecryptionProviderImpl(unsafeFromHandle: handle)
+            DecryptionProviderImpl(unsafeFromHandle: handle)
         } else {
             // Swift-generated handle, get the object from the handle map
-            return try handleMap.remove(handle: handle)
+            try handleMap.remove(handle: handle)
         }
     }
 
     public static func lower(_ value: DecryptionProvider) -> UInt64 {
-         if let rustImpl = value as? DecryptionProviderImpl {
-             // Rust-implemented object.  Clone the handle and return it
-            return rustImpl.uniffiCloneHandle()
-         } else {
+        if let rustImpl = value as? DecryptionProviderImpl {
+            // Rust-implemented object.  Clone the handle and return it
+            rustImpl.uniffiCloneHandle()
+        } else {
             // Swift object, generate a new vtable handle and return that.
-            return handleMap.insert(obj: value)
-         }
+            handleMap.insert(obj: value)
+        }
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DecryptionProvider {
@@ -698,47 +685,40 @@ public struct FfiConverterTypeDecryptionProvider: FfiConverter {
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeDecryptionProvider_lift(_ handle: UInt64) throws -> DecryptionProvider {
-    return try FfiConverterTypeDecryptionProvider.lift(handle)
+    try FfiConverterTypeDecryptionProvider.lift(handle)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeDecryptionProvider_lower(_ value: DecryptionProvider) -> UInt64 {
-    return FfiConverterTypeDecryptionProvider.lower(value)
+    FfiConverterTypeDecryptionProvider.lower(value)
 }
-
-
-
-
-
 
 /**
  * Provider for encrypting payloads for E2EE.
  */
 public protocol EncryptionProvider: AnyObject, Sendable {
-    
     /**
      * Encrypts the given payload being sent by the local participant.
      */
-    func encrypt(payload: Bytes) throws  -> EncryptedPayload
-    
+    func encrypt(payload: Bytes) throws -> EncryptedPayload
 }
+
 /**
  * Provider for encrypting payloads for E2EE.
  */
 open class EncryptionProviderImpl: EncryptionProvider, @unchecked Sendable {
     fileprivate let handle: UInt64
 
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    // Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public struct NoHandle {
         public init() {}
     }
@@ -746,10 +726,10 @@ open class EncryptionProviderImpl: EncryptionProvider, @unchecked Sendable {
     // TODO: We'd like this to be `private` but for Swifty reasons,
     // we can't implement `FfiConverter` without making this `required` and we can't
     // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromHandle handle: UInt64) {
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public required init(unsafeFromHandle handle: UInt64) {
         self.handle = handle
     }
 
@@ -758,19 +738,20 @@ open class EncryptionProviderImpl: EncryptionProvider, @unchecked Sendable {
     //
     // - Warning:
     //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public init(noHandle _: NoHandle) {
+        handle = 0
     }
 
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_livekit_datatrack_fn_clone_encryptionprovider(self.handle, $0) }
+        try! rustCall { uniffi_livekit_datatrack_fn_clone_encryptionprovider(self.handle, $0) }
     }
+
     // No primary constructor declared for this class.
 
     deinit {
@@ -782,36 +763,27 @@ open class EncryptionProviderImpl: EncryptionProvider, @unchecked Sendable {
         try! rustCall { uniffi_livekit_datatrack_fn_free_encryptionprovider(handle, $0) }
     }
 
-    
-
-    
     /**
      * Encrypts the given payload being sent by the local participant.
      */
-open func encrypt(payload: Bytes)throws  -> EncryptedPayload  {
-    return try  FfiConverterTypeEncryptedPayload_lift(try rustCallWithError(FfiConverterTypeEncryptionError_lift) {
-    uniffi_livekit_datatrack_fn_method_encryptionprovider_encrypt(
-            self.uniffiCloneHandle(),
-        FfiConverterTypeBytes_lower(payload),$0
-    )
-})
-}
-    
-
-    
+    open func encrypt(payload: Bytes) throws -> EncryptedPayload {
+        try FfiConverterTypeEncryptedPayload_lift(rustCallWithError(FfiConverterTypeEncryptionError_lift) {
+            uniffi_livekit_datatrack_fn_method_encryptionprovider_encrypt(
+                self.uniffiCloneHandle(),
+                FfiConverterTypeBytes_lower(payload), $0
+            )
+        })
+    }
 }
 
-
-
-// Put the implementation in a struct so we don't pollute the top-level namespace
-fileprivate struct UniffiCallbackInterfaceEncryptionProvider {
-
-    // Create the VTable using a series of closures.
-    // Swift automatically converts these into C callback functions.
-    //
-    // Store the vtable directly.
-    static let vtable: UniffiVTableCallbackInterfaceEncryptionProvider = UniffiVTableCallbackInterfaceEncryptionProvider(
-        uniffiFree: { (uniffiHandle: UInt64) -> () in
+/// Put the implementation in a struct so we don't pollute the top-level namespace
+private enum UniffiCallbackInterfaceEncryptionProvider {
+    /// Create the VTable using a series of closures.
+    /// Swift automatically converts these into C callback functions.
+    ///
+    /// Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceEncryptionProvider = .init(
+        uniffiFree: { (uniffiHandle: UInt64) in
             do {
                 try FfiConverterTypeEncryptionProvider.handleMap.remove(handle: uniffiHandle)
             } catch {
@@ -837,11 +809,10 @@ fileprivate struct UniffiCallbackInterfaceEncryptionProvider {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
                 return try uniffiObj.encrypt(
-                     payload: try FfiConverterTypeBytes_lift(payload)
+                    payload: FfiConverterTypeBytes_lift(payload)
                 )
             }
 
-            
             let writeReturn = { uniffiOutReturn.pointee = FfiConverterTypeEncryptedPayload_lower($0) }
             uniffiTraitInterfaceCallWithError(
                 callStatus: uniffiCallStatus,
@@ -852,8 +823,8 @@ fileprivate struct UniffiCallbackInterfaceEncryptionProvider {
         }
     )
 
-    // Rust stores this pointer for future callback invocations, so it must live
-    // for the process lifetime (not just for the init function call).
+    /// Rust stores this pointer for future callback invocations, so it must live
+    /// for the process lifetime (not just for the init function call).
     static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceEncryptionProvider> = {
         let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceEncryptionProvider>.allocate(capacity: 1)
         ptr.initialize(to: vtable)
@@ -866,7 +837,7 @@ private func uniffiCallbackInitEncryptionProvider() {
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeEncryptionProvider: FfiConverter {
     fileprivate static let handleMap = UniffiHandleMap<EncryptionProvider>()
@@ -875,24 +846,24 @@ public struct FfiConverterTypeEncryptionProvider: FfiConverter {
     typealias SwiftType = EncryptionProvider
 
     public static func lift(_ handle: UInt64) throws -> EncryptionProvider {
-        if ((handle & 1) == 0) {
+        if (handle & 1) == 0 {
             // Rust-generated handle, construct a new class that uses the handle to implement the
             // interface
-            return EncryptionProviderImpl(unsafeFromHandle: handle)
+            EncryptionProviderImpl(unsafeFromHandle: handle)
         } else {
             // Swift-generated handle, get the object from the handle map
-            return try handleMap.remove(handle: handle)
+            try handleMap.remove(handle: handle)
         }
     }
 
     public static func lower(_ value: EncryptionProvider) -> UInt64 {
-         if let rustImpl = value as? EncryptionProviderImpl {
-             // Rust-implemented object.  Clone the handle and return it
-            return rustImpl.uniffiCloneHandle()
-         } else {
+        if let rustImpl = value as? EncryptionProviderImpl {
+            // Rust-implemented object.  Clone the handle and return it
+            rustImpl.uniffiCloneHandle()
+        } else {
             // Swift object, generate a new vtable handle and return that.
-            return handleMap.insert(obj: value)
-         }
+            handleMap.insert(obj: value)
+        }
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EncryptionProvider {
@@ -905,23 +876,19 @@ public struct FfiConverterTypeEncryptionProvider: FfiConverter {
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeEncryptionProvider_lift(_ handle: UInt64) throws -> EncryptionProvider {
-    return try FfiConverterTypeEncryptionProvider.lift(handle)
+    try FfiConverterTypeEncryptionProvider.lift(handle)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeEncryptionProvider_lower(_ value: EncryptionProvider) -> UInt64 {
-    return FfiConverterTypeEncryptionProvider.lower(value)
+    FfiConverterTypeEncryptionProvider.lower(value)
 }
-
-
-
 
 /**
  * Encrypted payload and metadata required for decryption.
@@ -931,33 +898,28 @@ public struct EncryptedPayload: Equatable, Hashable {
     public var iv: InitializationVector
     public var keyIndex: UInt8
 
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
     public init(payload: Bytes, iv: InitializationVector, keyIndex: UInt8) {
         self.payload = payload
         self.iv = iv
         self.keyIndex = keyIndex
     }
-
-    
-
-    
 }
 
 #if compiler(>=6)
-extension EncryptedPayload: Sendable {}
+    extension EncryptedPayload: Sendable {}
 #endif
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeEncryptedPayload: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EncryptedPayload {
-        return
-            try EncryptedPayload(
-                payload: FfiConverterTypeBytes.read(from: &buf), 
-                iv: FfiConverterTypeInitializationVector.read(from: &buf), 
-                keyIndex: FfiConverterUInt8.read(from: &buf)
+        try EncryptedPayload(
+            payload: FfiConverterTypeBytes.read(from: &buf),
+            iv: FfiConverterTypeInitializationVector.read(from: &buf),
+            keyIndex: FfiConverterUInt8.read(from: &buf)
         )
     }
 
@@ -968,24 +930,23 @@ public struct FfiConverterTypeEncryptedPayload: FfiConverterRustBuffer {
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeEncryptedPayload_lift(_ buf: RustBuffer) throws -> EncryptedPayload {
-    return try FfiConverterTypeEncryptedPayload.lift(buf)
+    try FfiConverterTypeEncryptedPayload.lift(buf)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeEncryptedPayload_lower(_ value: EncryptedPayload) -> RustBuffer {
-    return FfiConverterTypeEncryptedPayload.lower(value)
+    FfiConverterTypeEncryptedPayload.lower(value)
 }
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
-/**
+/* 
  * Encoding used for frames pushed on a data track.
  *
  * The serialization format of the frame bytes (e.g. [`Protobuf`]); the structure
@@ -996,7 +957,6 @@ public func FfiConverterTypeEncryptedPayload_lower(_ value: EncryptedPayload) ->
  */
 
 public enum DataTrackFrameEncoding: Equatable, Hashable {
-    
     /**
      * ROS 1, must be described by a [`Ros1Msg`] schema.
      *
@@ -1048,21 +1008,15 @@ public enum DataTrackFrameEncoding: Equatable, Hashable {
      * The identifier must be non-empty and not exceed the server's length limit.
 
      */
-    case custom(String
-    )
-
-
-
-
-
+    case custom(String)
 }
 
 #if compiler(>=6)
-extension DataTrackFrameEncoding: Sendable {}
+    extension DataTrackFrameEncoding: Sendable {}
 #endif
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeDataTrackFrameEncoding: FfiConverterRustBuffer {
     typealias SwiftType = DataTrackFrameEncoding
@@ -1070,93 +1024,78 @@ public struct FfiConverterTypeDataTrackFrameEncoding: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DataTrackFrameEncoding {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
         case 1: return .ros1
-        
+
         case 2: return .cdr
-        
+
         case 3: return .protobuf
-        
+
         case 4: return .flatbuffer
-        
+
         case 5: return .cbor
-        
+
         case 6: return .msgpack
-        
+
         case 7: return .json
-        
+
         case 8: return .other
-        
-        case 9: return .custom(try FfiConverterString.read(from: &buf)
-        )
-        
+
+        case 9: return try .custom(FfiConverterString.read(from: &buf))
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: DataTrackFrameEncoding, into buf: inout [UInt8]) {
         switch value {
-        
-        
         case .ros1:
             writeInt(&buf, Int32(1))
-        
-        
+
         case .cdr:
             writeInt(&buf, Int32(2))
-        
-        
+
         case .protobuf:
             writeInt(&buf, Int32(3))
-        
-        
+
         case .flatbuffer:
             writeInt(&buf, Int32(4))
-        
-        
+
         case .cbor:
             writeInt(&buf, Int32(5))
-        
-        
+
         case .msgpack:
             writeInt(&buf, Int32(6))
-        
-        
+
         case .json:
             writeInt(&buf, Int32(7))
-        
-        
+
         case .other:
             writeInt(&buf, Int32(8))
-        
-        
+
         case let .custom(v1):
             writeInt(&buf, Int32(9))
             FfiConverterString.write(v1, into: &buf)
-            
         }
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeDataTrackFrameEncoding_lift(_ buf: RustBuffer) throws -> DataTrackFrameEncoding {
-    return try FfiConverterTypeDataTrackFrameEncoding.lift(buf)
+    try FfiConverterTypeDataTrackFrameEncoding.lift(buf)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeDataTrackFrameEncoding_lower(_ value: DataTrackFrameEncoding) -> RustBuffer {
-    return FfiConverterTypeDataTrackFrameEncoding.lower(value)
+    FfiConverterTypeDataTrackFrameEncoding.lower(value)
 }
-
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
-/**
+/* 
  * Encoding used for a schema definition.
  *
  * Identifies the interface definition language the schema is written in (e.g. a
@@ -1168,7 +1107,6 @@ public func FfiConverterTypeDataTrackFrameEncoding_lower(_ value: DataTrackFrame
  */
 
 public enum DataTrackSchemaEncoding: Equatable, Hashable {
-    
     /**
      * Protocol Buffer IDL, describes [`Protobuf`] encoded frames.
      *
@@ -1222,21 +1160,15 @@ public enum DataTrackSchemaEncoding: Equatable, Hashable {
      * The identifier must be non-empty and not exceed the server's length limit.
 
      */
-    case custom(String
-    )
-
-
-
-
-
+    case custom(String)
 }
 
 #if compiler(>=6)
-extension DataTrackSchemaEncoding: Sendable {}
+    extension DataTrackSchemaEncoding: Sendable {}
 #endif
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeDataTrackSchemaEncoding: FfiConverterRustBuffer {
     typealias SwiftType = DataTrackSchemaEncoding
@@ -1244,121 +1176,95 @@ public struct FfiConverterTypeDataTrackSchemaEncoding: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DataTrackSchemaEncoding {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
         case 1: return .protobuf
-        
+
         case 2: return .flatbuffer
-        
+
         case 3: return .ros1Msg
-        
+
         case 4: return .ros2Msg
-        
+
         case 5: return .ros2Idl
-        
+
         case 6: return .omgIdl
-        
+
         case 7: return .jsonSchema
-        
+
         case 8: return .other
-        
-        case 9: return .custom(try FfiConverterString.read(from: &buf)
-        )
-        
+
+        case 9: return try .custom(FfiConverterString.read(from: &buf))
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: DataTrackSchemaEncoding, into buf: inout [UInt8]) {
         switch value {
-        
-        
         case .protobuf:
             writeInt(&buf, Int32(1))
-        
-        
+
         case .flatbuffer:
             writeInt(&buf, Int32(2))
-        
-        
+
         case .ros1Msg:
             writeInt(&buf, Int32(3))
-        
-        
+
         case .ros2Msg:
             writeInt(&buf, Int32(4))
-        
-        
+
         case .ros2Idl:
             writeInt(&buf, Int32(5))
-        
-        
+
         case .omgIdl:
             writeInt(&buf, Int32(6))
-        
-        
+
         case .jsonSchema:
             writeInt(&buf, Int32(7))
-        
-        
+
         case .other:
             writeInt(&buf, Int32(8))
-        
-        
+
         case let .custom(v1):
             writeInt(&buf, Int32(9))
             FfiConverterString.write(v1, into: &buf)
-            
         }
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeDataTrackSchemaEncoding_lift(_ buf: RustBuffer) throws -> DataTrackSchemaEncoding {
-    return try FfiConverterTypeDataTrackSchemaEncoding.lift(buf)
+    try FfiConverterTypeDataTrackSchemaEncoding.lift(buf)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeDataTrackSchemaEncoding_lower(_ value: DataTrackSchemaEncoding) -> RustBuffer {
-    return FfiConverterTypeDataTrackSchemaEncoding.lower(value)
+    FfiConverterTypeDataTrackSchemaEncoding.lower(value)
 }
 
-
-
 public enum DataTrackSubscribeError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
-
-    
-    
     case Unpublished(message: String)
-    
+
     case Timeout(message: String)
-    
+
     case Disconnected(message: String)
-    
+
     case Internal(message: String)
-    
 
-    
-
-    
-
-    
     public var errorDescription: String? {
         String(reflecting: self)
     }
-    
 }
 
 #if compiler(>=6)
-extension DataTrackSubscribeError: Sendable {}
+    extension DataTrackSubscribeError: Sendable {}
 #endif
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeDataTrackSubscribeError: FfiConverterRustBuffer {
     typealias SwiftType = DataTrackSubscribeError
@@ -1366,26 +1272,21 @@ public struct FfiConverterTypeDataTrackSubscribeError: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DataTrackSubscribeError {
         let variant: Int32 = try readInt(&buf)
         switch variant {
+        case 1: return try .Unpublished(
+                message: FfiConverterString.read(from: &buf)
+            )
 
-        
+        case 2: return try .Timeout(
+                message: FfiConverterString.read(from: &buf)
+            )
 
-        
-        case 1: return .Unpublished(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 2: return .Timeout(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 3: return .Disconnected(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 4: return .Internal(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+        case 3: return try .Disconnected(
+                message: FfiConverterString.read(from: &buf)
+            )
+
+        case 4: return try .Internal(
+                message: FfiConverterString.read(from: &buf)
+            )
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -1393,67 +1294,49 @@ public struct FfiConverterTypeDataTrackSubscribeError: FfiConverterRustBuffer {
 
     public static func write(_ value: DataTrackSubscribeError, into buf: inout [UInt8]) {
         switch value {
-
-        
-
-        
-        case .Unpublished(_ /* message is ignored*/):
+        case .Unpublished(_ /* message is ignored*/ ):
             writeInt(&buf, Int32(1))
-        case .Timeout(_ /* message is ignored*/):
+        case .Timeout(_ /* message is ignored*/ ):
             writeInt(&buf, Int32(2))
-        case .Disconnected(_ /* message is ignored*/):
+        case .Disconnected(_ /* message is ignored*/ ):
             writeInt(&buf, Int32(3))
-        case .Internal(_ /* message is ignored*/):
+        case .Internal(_ /* message is ignored*/ ):
             writeInt(&buf, Int32(4))
-
-        
         }
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeDataTrackSubscribeError_lift(_ buf: RustBuffer) throws -> DataTrackSubscribeError {
-    return try FfiConverterTypeDataTrackSubscribeError.lift(buf)
+    try FfiConverterTypeDataTrackSubscribeError.lift(buf)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeDataTrackSubscribeError_lower(_ value: DataTrackSubscribeError) -> RustBuffer {
-    return FfiConverterTypeDataTrackSubscribeError.lower(value)
+    FfiConverterTypeDataTrackSubscribeError.lower(value)
 }
-
 
 /**
  * An error indicating a payload could not be decrypted.
  */
 public enum DecryptionError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
+    case Failed(reason: String)
 
-    
-    
-    case Failed(reason: String
-    )
-
-    
-
-    
-
-    
     public var errorDescription: String? {
         String(reflecting: self)
     }
-    
 }
 
 #if compiler(>=6)
-extension DecryptionError: Sendable {}
+    extension DecryptionError: Sendable {}
 #endif
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeDecryptionError: FfiConverterRustBuffer {
     typealias SwiftType = DecryptionError
@@ -1461,76 +1344,54 @@ public struct FfiConverterTypeDecryptionError: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DecryptionError {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-
-        
-
-        
-        case 1: return .Failed(
-            reason: try FfiConverterString.read(from: &buf)
+        case 1: return try .Failed(
+                reason: FfiConverterString.read(from: &buf)
             )
 
-         default: throw UniffiInternalError.unexpectedEnumCase
+        default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: DecryptionError, into buf: inout [UInt8]) {
         switch value {
-
-        
-
-        
-        
         case let .Failed(reason):
             writeInt(&buf, Int32(1))
             FfiConverterString.write(reason, into: &buf)
-            
         }
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeDecryptionError_lift(_ buf: RustBuffer) throws -> DecryptionError {
-    return try FfiConverterTypeDecryptionError.lift(buf)
+    try FfiConverterTypeDecryptionError.lift(buf)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeDecryptionError_lower(_ value: DecryptionError) -> RustBuffer {
-    return FfiConverterTypeDecryptionError.lower(value)
+    FfiConverterTypeDecryptionError.lower(value)
 }
-
 
 /**
  * An error indicating a payload could not be encrypted.
  */
 public enum EncryptionError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
+    case Failed(reason: String)
 
-    
-    
-    case Failed(reason: String
-    )
-
-    
-
-    
-
-    
     public var errorDescription: String? {
         String(reflecting: self)
     }
-    
 }
 
 #if compiler(>=6)
-extension EncryptionError: Sendable {}
+    extension EncryptionError: Sendable {}
 #endif
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeEncryptionError: FfiConverterRustBuffer {
     typealias SwiftType = EncryptionError
@@ -1538,56 +1399,41 @@ public struct FfiConverterTypeEncryptionError: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EncryptionError {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-
-        
-
-        
-        case 1: return .Failed(
-            reason: try FfiConverterString.read(from: &buf)
+        case 1: return try .Failed(
+                reason: FfiConverterString.read(from: &buf)
             )
 
-         default: throw UniffiInternalError.unexpectedEnumCase
+        default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: EncryptionError, into buf: inout [UInt8]) {
         switch value {
-
-        
-
-        
-        
         case let .Failed(reason):
             writeInt(&buf, Int32(1))
             FfiConverterString.write(reason, into: &buf)
-            
         }
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeEncryptionError_lift(_ buf: RustBuffer) throws -> EncryptionError {
-    return try FfiConverterTypeEncryptionError.lift(buf)
+    try FfiConverterTypeEncryptionError.lift(buf)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeEncryptionError_lower(_ value: EncryptionError) -> RustBuffer {
-    return FfiConverterTypeEncryptionError.lower(value)
+    FfiConverterTypeEncryptionError.lower(value)
 }
-
 
 /**
  * An error that can occur when publishing a data track.
  */
 public enum PublishError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
-
-    
-    
     /**
      * Local participant does not have permission to publish data tracks.
      *
@@ -1595,12 +1441,12 @@ public enum PublishError: Swift.Error, Equatable, Hashable, Foundation.Localized
 
      */
     case NotAllowed(message: String)
-    
+
     /**
      * A track with the same name is already published by the local participant.
      */
     case DuplicateName(message: String)
-    
+
     /**
      * The track name is invalid.
      *
@@ -1608,50 +1454,43 @@ public enum PublishError: Swift.Error, Equatable, Hashable, Foundation.Localized
 
      */
     case InvalidName(message: String)
-    
+
     /**
      * Request to publish the track took long to complete.
      */
     case Timeout(message: String)
-    
+
     /**
      * No additional data tracks can be published by the local participant.
      */
     case LimitReached(message: String)
-    
+
     /**
      * Cannot publish data track when the room is disconnected.
      */
     case Disconnected(message: String)
-    
+
     /**
      * Schema metadata is invalid.
      */
     case InvalidSchema(message: String)
-    
+
     /**
      * Internal error, please report on GitHub.
      */
     case Internal(message: String)
-    
 
-    
-
-    
-
-    
     public var errorDescription: String? {
         String(reflecting: self)
     }
-    
 }
 
 #if compiler(>=6)
-extension PublishError: Sendable {}
+    extension PublishError: Sendable {}
 #endif
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypePublishError: FfiConverterRustBuffer {
     typealias SwiftType = PublishError
@@ -1659,42 +1498,37 @@ public struct FfiConverterTypePublishError: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PublishError {
         let variant: Int32 = try readInt(&buf)
         switch variant {
+        case 1: return try .NotAllowed(
+                message: FfiConverterString.read(from: &buf)
+            )
 
-        
+        case 2: return try .DuplicateName(
+                message: FfiConverterString.read(from: &buf)
+            )
 
-        
-        case 1: return .NotAllowed(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 2: return .DuplicateName(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 3: return .InvalidName(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 4: return .Timeout(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 5: return .LimitReached(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 6: return .Disconnected(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 7: return .InvalidSchema(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 8: return .Internal(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+        case 3: return try .InvalidName(
+                message: FfiConverterString.read(from: &buf)
+            )
+
+        case 4: return try .Timeout(
+                message: FfiConverterString.read(from: &buf)
+            )
+
+        case 5: return try .LimitReached(
+                message: FfiConverterString.read(from: &buf)
+            )
+
+        case 6: return try .Disconnected(
+                message: FfiConverterString.read(from: &buf)
+            )
+
+        case 7: return try .InvalidSchema(
+                message: FfiConverterString.read(from: &buf)
+            )
+
+        case 8: return try .Internal(
+                message: FfiConverterString.read(from: &buf)
+            )
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -1702,83 +1536,65 @@ public struct FfiConverterTypePublishError: FfiConverterRustBuffer {
 
     public static func write(_ value: PublishError, into buf: inout [UInt8]) {
         switch value {
-
-        
-
-        
-        case .NotAllowed(_ /* message is ignored*/):
+        case .NotAllowed(_ /* message is ignored*/ ):
             writeInt(&buf, Int32(1))
-        case .DuplicateName(_ /* message is ignored*/):
+        case .DuplicateName(_ /* message is ignored*/ ):
             writeInt(&buf, Int32(2))
-        case .InvalidName(_ /* message is ignored*/):
+        case .InvalidName(_ /* message is ignored*/ ):
             writeInt(&buf, Int32(3))
-        case .Timeout(_ /* message is ignored*/):
+        case .Timeout(_ /* message is ignored*/ ):
             writeInt(&buf, Int32(4))
-        case .LimitReached(_ /* message is ignored*/):
+        case .LimitReached(_ /* message is ignored*/ ):
             writeInt(&buf, Int32(5))
-        case .Disconnected(_ /* message is ignored*/):
+        case .Disconnected(_ /* message is ignored*/ ):
             writeInt(&buf, Int32(6))
-        case .InvalidSchema(_ /* message is ignored*/):
+        case .InvalidSchema(_ /* message is ignored*/ ):
             writeInt(&buf, Int32(7))
-        case .Internal(_ /* message is ignored*/):
+        case .Internal(_ /* message is ignored*/ ):
             writeInt(&buf, Int32(8))
-
-        
         }
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypePublishError_lift(_ buf: RustBuffer) throws -> PublishError {
-    return try FfiConverterTypePublishError.lift(buf)
+    try FfiConverterTypePublishError.lift(buf)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypePublishError_lower(_ value: PublishError) -> RustBuffer {
-    return FfiConverterTypePublishError.lower(value)
+    FfiConverterTypePublishError.lower(value)
 }
-
 
 /**
  * Reason why a data track frame could not be pushed.
  */
 public enum PushFrameErrorReason: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
-
-    
-    
     /**
      * Track is no longer published.
      */
     case TrackUnpublished(message: String)
-    
+
     /**
      * Frame was dropped due to the pipeline queue being full.
      */
     case QueueFull(message: String)
-    
 
-    
-
-    
-
-    
     public var errorDescription: String? {
         String(reflecting: self)
     }
-    
 }
 
 #if compiler(>=6)
-extension PushFrameErrorReason: Sendable {}
+    extension PushFrameErrorReason: Sendable {}
 #endif
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypePushFrameErrorReason: FfiConverterRustBuffer {
     typealias SwiftType = PushFrameErrorReason
@@ -1786,18 +1602,13 @@ public struct FfiConverterTypePushFrameErrorReason: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PushFrameErrorReason {
         let variant: Int32 = try readInt(&buf)
         switch variant {
+        case 1: return try .TrackUnpublished(
+                message: FfiConverterString.read(from: &buf)
+            )
 
-        
-
-        
-        case 1: return .TrackUnpublished(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 2: return .QueueFull(
-            message: try FfiConverterString.read(from: &buf)
-        )
-        
+        case 2: return try .QueueFull(
+                message: FfiConverterString.read(from: &buf)
+            )
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -1805,35 +1616,27 @@ public struct FfiConverterTypePushFrameErrorReason: FfiConverterRustBuffer {
 
     public static func write(_ value: PushFrameErrorReason, into buf: inout [UInt8]) {
         switch value {
-
-        
-
-        
-        case .TrackUnpublished(_ /* message is ignored*/):
+        case .TrackUnpublished(_ /* message is ignored*/ ):
             writeInt(&buf, Int32(1))
-        case .QueueFull(_ /* message is ignored*/):
+        case .QueueFull(_ /* message is ignored*/ ):
             writeInt(&buf, Int32(2))
-
-        
         }
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypePushFrameErrorReason_lift(_ buf: RustBuffer) throws -> PushFrameErrorReason {
-    return try FfiConverterTypePushFrameErrorReason.lift(buf)
+    try FfiConverterTypePushFrameErrorReason.lift(buf)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypePushFrameErrorReason_lower(_ value: PushFrameErrorReason) -> RustBuffer {
-    return FfiConverterTypePushFrameErrorReason.lower(value)
+    FfiConverterTypePushFrameErrorReason.lower(value)
 }
-
 
 /**
  * Typealias from the type name used in the UDL file to the builtin type.  This
@@ -1842,49 +1645,48 @@ public func FfiConverterTypePushFrameErrorReason_lower(_ value: PushFrameErrorRe
 public typealias InitializationVector = Data
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeInitializationVector: FfiConverter {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InitializationVector {
-        return try FfiConverterData.read(from: &buf)
+        try FfiConverterData.read(from: &buf)
     }
 
     public static func write(_ value: InitializationVector, into buf: inout [UInt8]) {
-        return FfiConverterData.write(value, into: &buf)
+        FfiConverterData.write(value, into: &buf)
     }
 
     public static func lift(_ value: RustBuffer) throws -> InitializationVector {
-        return try FfiConverterData.lift(value)
+        try FfiConverterData.lift(value)
     }
 
     public static func lower(_ value: InitializationVector) -> RustBuffer {
-        return FfiConverterData.lower(value)
+        FfiConverterData.lower(value)
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeInitializationVector_lift(_ value: RustBuffer) throws -> InitializationVector {
-    return try FfiConverterTypeInitializationVector.lift(value)
+    try FfiConverterTypeInitializationVector.lift(value)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeInitializationVector_lower(_ value: InitializationVector) -> RustBuffer {
-    return FfiConverterTypeInitializationVector.lower(value)
+    FfiConverterTypeInitializationVector.lower(value)
 }
-
 
 private enum InitializationResult {
     case ok
     case contractVersionMismatch
     case apiChecksumMismatch
 }
-// Use a global variable to perform the versioning checks. Swift ensures that
-// the code inside is only computed once.
+
+/// Use a global variable to perform the versioning checks. Swift ensures that
+/// the code inside is only computed once.
 private let initializationResult: InitializationResult = {
     // Get the bindings contract version from our ComponentInterface
     let bindings_contract_version = 30
@@ -1893,10 +1695,10 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_livekit_datatrack_checksum_method_decryptionprovider_decrypt() != 1225) {
+    if uniffi_livekit_datatrack_checksum_method_decryptionprovider_decrypt() != 1225 {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_datatrack_checksum_method_encryptionprovider_encrypt() != 40311) {
+    if uniffi_livekit_datatrack_checksum_method_encryptionprovider_encrypt() != 40311 {
         return InitializationResult.apiChecksumMismatch
     }
 
@@ -1906,8 +1708,8 @@ private let initializationResult: InitializationResult = {
     return InitializationResult.ok
 }()
 
-// Make the ensure init function public so that other modules which have external type references to
-// our types can call it.
+/// Make the ensure init function public so that other modules which have external type references to
+/// our types can call it.
 public func uniffiEnsureLivekitDatatrackInitialized() {
     switch initializationResult {
     case .ok:
