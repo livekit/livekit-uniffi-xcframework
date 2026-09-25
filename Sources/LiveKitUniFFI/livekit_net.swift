@@ -8,11 +8,11 @@ import Foundation
 // might be in a separate module, or it might be compiled inline into
 // this module. This is a bit of light hackery to work with both.
 #if canImport(RustLiveKitUniFFI)
-import RustLiveKitUniFFI
+    import RustLiveKitUniFFI
 #endif
 
-fileprivate extension RustBuffer {
-    // Allocate a new buffer, copying the contents of a `UInt8` array.
+private extension RustBuffer {
+    /// Allocate a new buffer, copying the contents of a `UInt8` array.
     init(bytes: [UInt8]) {
         let rbuf = bytes.withUnsafeBufferPointer { ptr in
             RustBuffer.from(ptr)
@@ -21,21 +21,21 @@ fileprivate extension RustBuffer {
     }
 
     static func empty() -> RustBuffer {
-        RustBuffer(capacity: 0, len:0, data: nil)
+        RustBuffer(capacity: 0, len: 0, data: nil)
     }
 
     static func from(_ ptr: UnsafeBufferPointer<UInt8>) -> RustBuffer {
         try! rustCall { ffi_livekit_net_rustbuffer_from_bytes(ForeignBytes(bufferPointer: ptr), $0) }
     }
 
-    // Frees the buffer in place.
-    // The buffer must not be used after this is called.
+    /// Frees the buffer in place.
+    /// The buffer must not be used after this is called.
     func deallocate() {
         try! rustCall { ffi_livekit_net_rustbuffer_free(self, $0) }
     }
 }
 
-fileprivate extension ForeignBytes {
+private extension ForeignBytes {
     init(bufferPointer: UnsafeBufferPointer<UInt8>) {
         self.init(len: Int32(bufferPointer.count), data: bufferPointer.baseAddress)
     }
@@ -48,7 +48,7 @@ fileprivate extension ForeignBytes {
 // Helper classes/extensions that don't change.
 // Someday, this will be in a library of its own.
 
-fileprivate extension Data {
+private extension Data {
     init(rustBuffer: RustBuffer) {
         self.init(
             bytesNoCopy: rustBuffer.data!,
@@ -72,15 +72,15 @@ fileprivate extension Data {
 //
 // Instead, the read() method and these helper functions input a tuple of data
 
-fileprivate func createReader(data: Data) -> (data: Data, offset: Data.Index) {
+private func createReader(data: Data) -> (data: Data, offset: Data.Index) {
     (data: data, offset: 0)
 }
 
-// Reads an integer at the current offset, in big-endian order, and advances
-// the offset on success. Throws if reading the integer would move the
-// offset past the end of the buffer.
-fileprivate func readInt<T: FixedWidthInteger>(_ reader: inout (data: Data, offset: Data.Index)) throws -> T {
-    let range = reader.offset..<reader.offset + MemoryLayout<T>.size
+/// Reads an integer at the current offset, in big-endian order, and advances
+/// the offset on success. Throws if reading the integer would move the
+/// offset past the end of the buffer.
+private func readInt<T: FixedWidthInteger>(_ reader: inout (data: Data, offset: Data.Index)) throws -> T {
+    let range = reader.offset ..< reader.offset + MemoryLayout<T>.size
     guard reader.data.count >= range.upperBound else {
         throw UniffiInternalError.bufferOverflow
     }
@@ -90,73 +90,73 @@ fileprivate func readInt<T: FixedWidthInteger>(_ reader: inout (data: Data, offs
         return value as! T
     }
     var value: T = 0
-    let _ = withUnsafeMutableBytes(of: &value, { reader.data.copyBytes(to: $0, from: range)})
+    let _ = withUnsafeMutableBytes(of: &value) { reader.data.copyBytes(to: $0, from: range) }
     reader.offset = range.upperBound
     return value.bigEndian
 }
 
-// Reads an arbitrary number of bytes, to be used to read
-// raw bytes, this is useful when lifting strings
-fileprivate func readBytes(_ reader: inout (data: Data, offset: Data.Index), count: Int) throws -> Array<UInt8> {
-    let range = reader.offset..<(reader.offset+count)
+/// Reads an arbitrary number of bytes, to be used to read
+/// raw bytes, this is useful when lifting strings
+private func readBytes(_ reader: inout (data: Data, offset: Data.Index), count: Int) throws -> [UInt8] {
+    let range = reader.offset ..< (reader.offset + count)
     guard reader.data.count >= range.upperBound else {
         throw UniffiInternalError.bufferOverflow
     }
     var value = [UInt8](repeating: 0, count: count)
-    value.withUnsafeMutableBufferPointer({ buffer in
+    value.withUnsafeMutableBufferPointer { buffer in
         reader.data.copyBytes(to: buffer, from: range)
-    })
+    }
     reader.offset = range.upperBound
     return value
 }
 
-// Reads a float at the current offset.
-fileprivate func readFloat(_ reader: inout (data: Data, offset: Data.Index)) throws -> Float {
-    return Float(bitPattern: try readInt(&reader))
+/// Reads a float at the current offset.
+private func readFloat(_ reader: inout (data: Data, offset: Data.Index)) throws -> Float {
+    try Float(bitPattern: readInt(&reader))
 }
 
-// Reads a float at the current offset.
-fileprivate func readDouble(_ reader: inout (data: Data, offset: Data.Index)) throws -> Double {
-    return Double(bitPattern: try readInt(&reader))
+/// Reads a float at the current offset.
+private func readDouble(_ reader: inout (data: Data, offset: Data.Index)) throws -> Double {
+    try Double(bitPattern: readInt(&reader))
 }
 
-// Indicates if the offset has reached the end of the buffer.
-fileprivate func hasRemaining(_ reader: (data: Data, offset: Data.Index)) -> Bool {
-    return reader.offset < reader.data.count
+/// Indicates if the offset has reached the end of the buffer.
+private func hasRemaining(_ reader: (data: Data, offset: Data.Index)) -> Bool {
+    reader.offset < reader.data.count
 }
 
 // Define writer functionality.  Normally this would be defined in a class or
 // struct, but we use standalone functions instead in order to make external
 // types work.  See the above discussion on Readers for details.
 
-fileprivate func createWriter() -> [UInt8] {
-    return []
+private func createWriter() -> [UInt8] {
+    []
 }
 
-fileprivate func writeBytes<S>(_ writer: inout [UInt8], _ byteArr: S) where S: Sequence, S.Element == UInt8 {
+private func writeBytes(_ writer: inout [UInt8], _ byteArr: some Sequence<UInt8>) {
     writer.append(contentsOf: byteArr)
 }
 
-// Writes an integer in big-endian order.
-//
-// Warning: make sure what you are trying to write
-// is in the correct type!
-fileprivate func writeInt<T: FixedWidthInteger>(_ writer: inout [UInt8], _ value: T) {
+/// Writes an integer in big-endian order.
+///
+/// Warning: make sure what you are trying to write
+/// is in the correct type!
+private func writeInt(_ writer: inout [UInt8], _ value: some FixedWidthInteger) {
     var value = value.bigEndian
     withUnsafeBytes(of: &value) { writer.append(contentsOf: $0) }
 }
 
-fileprivate func writeFloat(_ writer: inout [UInt8], _ value: Float) {
+private func writeFloat(_ writer: inout [UInt8], _ value: Float) {
     writeInt(&writer, value.bitPattern)
 }
 
-fileprivate func writeDouble(_ writer: inout [UInt8], _ value: Double) {
+private func writeDouble(_ writer: inout [UInt8], _ value: Double) {
     writeInt(&writer, value.bitPattern)
 }
 
-// Protocol for types that transfer other types across the FFI. This is
-// analogous to the Rust trait of the same name.
-fileprivate protocol FfiConverter {
+/// Protocol for types that transfer other types across the FFI. This is
+/// analogous to the Rust trait of the same name.
+private protocol FfiConverter {
     associatedtype FfiType
     associatedtype SwiftType
 
@@ -166,33 +166,33 @@ fileprivate protocol FfiConverter {
     static func write(_ value: SwiftType, into buf: inout [UInt8])
 }
 
-// Types conforming to `Primitive` pass themselves directly over the FFI.
-fileprivate protocol FfiConverterPrimitive: FfiConverter where FfiType == SwiftType { }
+/// Types conforming to `Primitive` pass themselves directly over the FFI.
+private protocol FfiConverterPrimitive: FfiConverter where FfiType == SwiftType {}
 
 extension FfiConverterPrimitive {
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public static func lift(_ value: FfiType) throws -> SwiftType {
-        return value
+        value
     }
 
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public static func lower(_ value: SwiftType) -> FfiType {
-        return value
+        value
     }
 }
 
-// Types conforming to `FfiConverterRustBuffer` lift and lower into a `RustBuffer`.
-// Used for complex types where it's hard to write a custom lift/lower.
-fileprivate protocol FfiConverterRustBuffer: FfiConverter where FfiType == RustBuffer {}
+/// Types conforming to `FfiConverterRustBuffer` lift and lower into a `RustBuffer`.
+/// Used for complex types where it's hard to write a custom lift/lower.
+private protocol FfiConverterRustBuffer: FfiConverter where FfiType == RustBuffer {}
 
 extension FfiConverterRustBuffer {
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public static func lift(_ buf: RustBuffer) throws -> SwiftType {
         var reader = createReader(data: Data(rustBuffer: buf))
         let value = try read(from: &reader)
@@ -203,18 +203,19 @@ extension FfiConverterRustBuffer {
         return value
     }
 
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public static func lower(_ value: SwiftType) -> RustBuffer {
-          var writer = createWriter()
-          write(value, into: &writer)
-          return RustBuffer(bytes: writer)
+        var writer = createWriter()
+        write(value, into: &writer)
+        return RustBuffer(bytes: writer)
     }
 }
-// An error type for FFI errors. These errors occur at the UniFFI level, not
-// the library level.
-fileprivate enum UniffiInternalError: LocalizedError {
+
+/// An error type for FFI errors. These errors occur at the UniFFI level, not
+/// the library level.
+private enum UniffiInternalError: LocalizedError {
     case bufferOverflow
     case incompleteData
     case unexpectedOptionalTag
@@ -225,39 +226,39 @@ fileprivate enum UniffiInternalError: LocalizedError {
     case unexpectedStaleHandle
     case rustPanic(_ message: String)
 
-    public var errorDescription: String? {
+    var errorDescription: String? {
         switch self {
-        case .bufferOverflow: return "Reading the requested value would read past the end of the buffer"
-        case .incompleteData: return "The buffer still has data after lifting its containing value"
-        case .unexpectedOptionalTag: return "Unexpected optional tag; should be 0 or 1"
-        case .unexpectedEnumCase: return "Raw enum value doesn't match any cases"
-        case .unexpectedNullPointer: return "Raw pointer value was null"
-        case .unexpectedRustCallStatusCode: return "Unexpected RustCallStatus code"
-        case .unexpectedRustCallError: return "CALL_ERROR but no errorClass specified"
-        case .unexpectedStaleHandle: return "The object in the handle map has been dropped already"
-        case let .rustPanic(message): return message
+        case .bufferOverflow: "Reading the requested value would read past the end of the buffer"
+        case .incompleteData: "The buffer still has data after lifting its containing value"
+        case .unexpectedOptionalTag: "Unexpected optional tag; should be 0 or 1"
+        case .unexpectedEnumCase: "Raw enum value doesn't match any cases"
+        case .unexpectedNullPointer: "Raw pointer value was null"
+        case .unexpectedRustCallStatusCode: "Unexpected RustCallStatus code"
+        case .unexpectedRustCallError: "CALL_ERROR but no errorClass specified"
+        case .unexpectedStaleHandle: "The object in the handle map has been dropped already"
+        case let .rustPanic(message): message
         }
     }
 }
 
-fileprivate extension NSLock {
+private extension NSLock {
     func withLock<T>(f: () throws -> T) rethrows -> T {
-        self.lock()
+        lock()
         defer { self.unlock() }
         return try f()
     }
 }
 
-fileprivate let CALL_SUCCESS: Int8 = 0
-fileprivate let CALL_ERROR: Int8 = 1
-fileprivate let CALL_UNEXPECTED_ERROR: Int8 = 2
-fileprivate let CALL_CANCELLED: Int8 = 3
+private let CALL_SUCCESS: Int8 = 0
+private let CALL_ERROR: Int8 = 1
+private let CALL_UNEXPECTED_ERROR: Int8 = 2
+private let CALL_CANCELLED: Int8 = 3
 
-fileprivate extension RustCallStatus {
+private extension RustCallStatus {
     init() {
         self.init(
             code: CALL_SUCCESS,
-            errorBuf: RustBuffer.init(
+            errorBuf: RustBuffer(
                 capacity: 0,
                 len: 0,
                 data: nil
@@ -271,66 +272,67 @@ private func rustCall<T>(_ callback: (UnsafeMutablePointer<RustCallStatus>) -> T
     return try makeRustCall(callback, errorHandler: neverThrow)
 }
 
-private func rustCallWithError<T, E: Swift.Error>(
-    _ errorHandler: @escaping (RustBuffer) throws -> E,
-    _ callback: (UnsafeMutablePointer<RustCallStatus>) -> T) throws -> T {
+private func rustCallWithError<T>(
+    _ errorHandler: @escaping (RustBuffer) throws -> some Swift.Error,
+    _ callback: (UnsafeMutablePointer<RustCallStatus>) -> T
+) throws -> T {
     try makeRustCall(callback, errorHandler: errorHandler)
 }
 
-private func makeRustCall<T, E: Swift.Error>(
+private func makeRustCall<T>(
     _ callback: (UnsafeMutablePointer<RustCallStatus>) -> T,
-    errorHandler: ((RustBuffer) throws -> E)?
+    errorHandler: ((RustBuffer) throws -> some Swift.Error)?
 ) throws -> T {
     uniffiEnsureLivekitNetInitialized()
-    var callStatus = RustCallStatus.init()
+    var callStatus = RustCallStatus()
     let returnedVal = callback(&callStatus)
     try uniffiCheckCallStatus(callStatus: callStatus, errorHandler: errorHandler)
     return returnedVal
 }
 
-private func uniffiCheckCallStatus<E: Swift.Error>(
+private func uniffiCheckCallStatus(
     callStatus: RustCallStatus,
-    errorHandler: ((RustBuffer) throws -> E)?
+    errorHandler: ((RustBuffer) throws -> some Swift.Error)?
 ) throws {
     switch callStatus.code {
-        case CALL_SUCCESS:
-            return
+    case CALL_SUCCESS:
+        return
 
-        case CALL_ERROR:
-            if let errorHandler = errorHandler {
-                throw try errorHandler(callStatus.errorBuf)
-            } else {
-                callStatus.errorBuf.deallocate()
-                throw UniffiInternalError.unexpectedRustCallError
-            }
+    case CALL_ERROR:
+        if let errorHandler {
+            throw try errorHandler(callStatus.errorBuf)
+        } else {
+            callStatus.errorBuf.deallocate()
+            throw UniffiInternalError.unexpectedRustCallError
+        }
 
-        case CALL_UNEXPECTED_ERROR:
-            // When the rust code sees a panic, it tries to construct a RustBuffer
-            // with the message.  But if that code panics, then it just sends back
-            // an empty buffer.
-            if callStatus.errorBuf.len > 0 {
-                throw UniffiInternalError.rustPanic(try FfiConverterString.lift(callStatus.errorBuf))
-            } else {
-                callStatus.errorBuf.deallocate()
-                throw UniffiInternalError.rustPanic("Rust panic")
-            }
+    case CALL_UNEXPECTED_ERROR:
+        // When the rust code sees a panic, it tries to construct a RustBuffer
+        // with the message.  But if that code panics, then it just sends back
+        // an empty buffer.
+        if callStatus.errorBuf.len > 0 {
+            throw try UniffiInternalError.rustPanic(FfiConverterString.lift(callStatus.errorBuf))
+        } else {
+            callStatus.errorBuf.deallocate()
+            throw UniffiInternalError.rustPanic("Rust panic")
+        }
 
-        case CALL_CANCELLED:
-            fatalError("Cancellation not supported yet")
+    case CALL_CANCELLED:
+        fatalError("Cancellation not supported yet")
 
-        default:
-            throw UniffiInternalError.unexpectedRustCallStatusCode
+    default:
+        throw UniffiInternalError.unexpectedRustCallStatusCode
     }
 }
 
 private func uniffiTraitInterfaceCall<T>(
     callStatus: UnsafeMutablePointer<RustCallStatus>,
     makeCall: () throws -> T,
-    writeReturn: (T) -> ()
+    writeReturn: (T) -> Void
 ) {
     do {
         try writeReturn(makeCall())
-    } catch let error {
+    } catch {
         callStatus.pointee.code = CALL_UNEXPECTED_ERROR
         callStatus.pointee.errorBuf = FfiConverterString.lower(String(describing: error))
     }
@@ -339,7 +341,7 @@ private func uniffiTraitInterfaceCall<T>(
 private func uniffiTraitInterfaceCallWithError<T, E>(
     callStatus: UnsafeMutablePointer<RustCallStatus>,
     makeCall: () throws -> T,
-    writeReturn: (T) -> (),
+    writeReturn: (T) -> Void,
     lowerError: (E) -> RustBuffer
 ) {
     do {
@@ -352,12 +354,13 @@ private func uniffiTraitInterfaceCallWithError<T, E>(
         callStatus.pointee.errorBuf = FfiConverterString.lower(String(describing: error))
     }
 }
-// Initial value and increment amount for handles. 
-// These ensure that SWIFT handles always have the lowest bit set
-fileprivate let UNIFFI_HANDLEMAP_INITIAL: UInt64 = 1
-fileprivate let UNIFFI_HANDLEMAP_DELTA: UInt64 = 2
 
-fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
+// Initial value and increment amount for handles.
+// These ensure that SWIFT handles always have the lowest bit set
+private let UNIFFI_HANDLEMAP_INITIAL: UInt64 = 1
+private let UNIFFI_HANDLEMAP_DELTA: UInt64 = 2
+
+private final class UniffiHandleMap<T>: @unchecked Sendable {
     // All mutation happens with this lock held, which is why we implement @unchecked Sendable.
     private let lock = NSLock()
     private var map: [UInt64: T] = [:]
@@ -365,11 +368,11 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
 
     func insert(obj: T) -> UInt64 {
         lock.withLock {
-            return doInsert(obj)
+            doInsert(obj)
         }
     }
 
-    // Low-level insert function, this assumes `lock` is held.
+    /// Low-level insert function, this assumes `lock` is held.
     private func doInsert(_ obj: T) -> UInt64 {
         let handle = currentHandle
         currentHandle += UNIFFI_HANDLEMAP_DELTA
@@ -377,7 +380,7 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
         return handle
     }
 
-     func get(handle: UInt64) throws -> T {
+    func get(handle: UInt64) throws -> T {
         try lock.withLock {
             guard let obj = map[handle] else {
                 throw UniffiInternalError.unexpectedStaleHandle
@@ -386,7 +389,7 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
         }
     }
 
-     func clone(handle: UInt64) throws -> UInt64 {
+    func clone(handle: UInt64) throws -> UInt64 {
         try lock.withLock {
             guard let obj = map[handle] else {
                 throw UniffiInternalError.unexpectedStaleHandle
@@ -406,16 +409,13 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
     }
 
     var count: Int {
-        get {
-            map.count
-        }
+        map.count
     }
 }
 
-
-// Public interface members begin here.
-// Magic number for the Rust proxy to call using the same mechanism as every other method,
-// to free the callback once it's dropped by Rust.
+/// Public interface members begin here.
+/// Magic number for the Rust proxy to call using the same mechanism as every other method,
+/// to free the callback once it's dropped by Rust.
 private let IDX_CALLBACK_FREE: Int32 = 0
 // Callback return codes
 private let UNIFFI_CALLBACK_SUCCESS: Int32 = 0
@@ -423,69 +423,69 @@ private let UNIFFI_CALLBACK_ERROR: Int32 = 1
 private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
+private struct FfiConverterUInt16: FfiConverterPrimitive {
     typealias FfiType = UInt16
     typealias SwiftType = UInt16
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt16 {
-        return try lift(readInt(&buf))
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt16 {
+        try lift(readInt(&buf))
     }
 
-    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+    static func write(_ value: SwiftType, into buf: inout [UInt8]) {
         writeInt(&buf, lower(value))
     }
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
+private struct FfiConverterUInt64: FfiConverterPrimitive {
     typealias FfiType = UInt64
     typealias SwiftType = UInt64
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt64 {
-        return try lift(readInt(&buf))
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt64 {
+        try lift(readInt(&buf))
     }
 
-    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+    static func write(_ value: SwiftType, into buf: inout [UInt8]) {
         writeInt(&buf, lower(value))
     }
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterBool : FfiConverter {
+private struct FfiConverterBool: FfiConverter {
     typealias FfiType = Int8
     typealias SwiftType = Bool
 
-    public static func lift(_ value: Int8) throws -> Bool {
-        return value != 0
+    static func lift(_ value: Int8) throws -> Bool {
+        value != 0
     }
 
-    public static func lower(_ value: Bool) -> Int8 {
-        return value ? 1 : 0
+    static func lower(_ value: Bool) -> Int8 {
+        value ? 1 : 0
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Bool {
-        return try lift(readInt(&buf))
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Bool {
+        try lift(readInt(&buf))
     }
 
-    public static func write(_ value: Bool, into buf: inout [UInt8]) {
+    static func write(_ value: Bool, into buf: inout [UInt8]) {
         writeInt(&buf, lower(value))
     }
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterString: FfiConverter {
+private struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
     typealias FfiType = RustBuffer
 
-    public static func lift(_ value: RustBuffer) throws -> String {
+    static func lift(_ value: RustBuffer) throws -> String {
         defer {
             value.deallocate()
         }
@@ -496,8 +496,8 @@ fileprivate struct FfiConverterString: FfiConverter {
         return String(bytes: bytes, encoding: String.Encoding.utf8)!
     }
 
-    public static func lower(_ value: String) -> RustBuffer {
-        return value.utf8CString.withUnsafeBufferPointer { ptr in
+    static func lower(_ value: String) -> RustBuffer {
+        value.utf8CString.withUnsafeBufferPointer { ptr in
             // The swift string gives us int8_t, we want uint8_t.
             ptr.withMemoryRebound(to: UInt8.self) { ptr in
                 // The swift string gives us a trailing null byte, we don't want it.
@@ -507,12 +507,12 @@ fileprivate struct FfiConverterString: FfiConverter {
         }
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> String {
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> String {
         let len: Int32 = try readInt(&buf)
-        return String(bytes: try readBytes(&buf, count: Int(len)), encoding: String.Encoding.utf8)!
+        return try String(bytes: readBytes(&buf, count: Int(len)), encoding: String.Encoding.utf8)!
     }
 
-    public static func write(_ value: String, into buf: inout [UInt8]) {
+    static func write(_ value: String, into buf: inout [UInt8]) {
         let len = Int32(value.utf8.count)
         writeInt(&buf, len)
         writeBytes(&buf, value.utf8)
@@ -520,25 +520,22 @@ fileprivate struct FfiConverterString: FfiConverter {
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterData: FfiConverterRustBuffer {
+private struct FfiConverterData: FfiConverterRustBuffer {
     typealias SwiftType = Data
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
         let len: Int32 = try readInt(&buf)
-        return Data(try readBytes(&buf, count: Int(len)))
+        return try Data(readBytes(&buf, count: Int(len)))
     }
 
-    public static func write(_ value: Data, into buf: inout [UInt8]) {
+    static func write(_ value: Data, into buf: inout [UInt8]) {
         let len = Int32(value.count)
         writeInt(&buf, len)
         writeBytes(&buf, value)
     }
 }
-
-
-
 
 /**
  * A host- or Rust-provided HTTP transport. Performs the request/response HTTP
@@ -550,13 +547,12 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
  * implementation (or, for foreign impls, the FFI) surface.
  */
 public protocol HttpClient: AnyObject, Sendable {
-    
     /**
      * Perform one HTTP request, sending `body` if present.
      */
-    func request(method: HttpMethod, url: String, headers: [Header], body: Data?) async throws  -> HttpResponse
-    
+    func request(method: HttpMethod, url: String, headers: [Header], body: Data?) async throws -> HttpResponse
 }
+
 /**
  * A host- or Rust-provided HTTP transport. Performs the request/response HTTP
  * calls LiveKit needs (connection validation, region discovery, token endpoints);
@@ -569,10 +565,10 @@ public protocol HttpClient: AnyObject, Sendable {
 open class HttpClientImpl: HttpClient, @unchecked Sendable {
     fileprivate let handle: UInt64
 
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    // Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public struct NoHandle {
         public init() {}
     }
@@ -580,10 +576,10 @@ open class HttpClientImpl: HttpClient, @unchecked Sendable {
     // TODO: We'd like this to be `private` but for Swifty reasons,
     // we can't implement `FfiConverter` without making this `required` and we can't
     // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromHandle handle: UInt64) {
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public required init(unsafeFromHandle handle: UInt64) {
         self.handle = handle
     }
 
@@ -592,19 +588,20 @@ open class HttpClientImpl: HttpClient, @unchecked Sendable {
     //
     // - Warning:
     //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public init(noHandle _: NoHandle) {
+        handle = 0
     }
 
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_livekit_net_fn_clone_httpclient(self.handle, $0) }
+        try! rustCall { uniffi_livekit_net_fn_clone_httpclient(self.handle, $0) }
     }
+
     // No primary constructor declared for this class.
 
     deinit {
@@ -616,19 +613,15 @@ open class HttpClientImpl: HttpClient, @unchecked Sendable {
         try! rustCall { uniffi_livekit_net_fn_free_httpclient(handle, $0) }
     }
 
-    
-
-    
     /**
      * Perform one HTTP request, sending `body` if present.
      */
-open func request(method: HttpMethod, url: String, headers: [Header], body: Data?)async throws  -> HttpResponse  {
-    return
-        try  await uniffiRustCallAsync(
+    open func request(method: HttpMethod, url: String, headers: [Header], body: Data?) async throws -> HttpResponse {
+        try await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_livekit_net_fn_method_httpclient_request(
                     self.uniffiCloneHandle(),
-                    FfiConverterTypeHttpMethod_lower(method),FfiConverterString.lower(url),FfiConverterSequenceTypeHeader.lower(headers),FfiConverterOptionData.lower(body)
+                    FfiConverterTypeHttpMethod_lower(method), FfiConverterString.lower(url), FfiConverterSequenceTypeHeader.lower(headers), FfiConverterOptionData.lower(body)
                 )
             },
             pollFunc: ffi_livekit_net_rust_future_poll_rust_buffer,
@@ -637,23 +630,17 @@ open func request(method: HttpMethod, url: String, headers: [Header], body: Data
             liftFunc: FfiConverterTypeHttpResponse_lift,
             errorHandler: FfiConverterTypeTransportError_lift
         )
-}
-    
-
-    
+    }
 }
 
-
-
-// Put the implementation in a struct so we don't pollute the top-level namespace
-fileprivate struct UniffiCallbackInterfaceHttpClient {
-
-    // Create the VTable using a series of closures.
-    // Swift automatically converts these into C callback functions.
-    //
-    // Store the vtable directly.
-    static let vtable: UniffiVTableCallbackInterfaceHttpClient = UniffiVTableCallbackInterfaceHttpClient(
-        uniffiFree: { (uniffiHandle: UInt64) -> () in
+/// Put the implementation in a struct so we don't pollute the top-level namespace
+private enum UniffiCallbackInterfaceHttpClient {
+    /// Create the VTable using a series of closures.
+    /// Swift automatically converts these into C callback functions.
+    ///
+    /// Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceHttpClient = .init(
+        uniffiFree: { (uniffiHandle: UInt64) in
             do {
                 try FfiConverterTypeHttpClient.handleMap.remove(handle: uniffiHandle)
             } catch {
@@ -683,10 +670,10 @@ fileprivate struct UniffiCallbackInterfaceHttpClient {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
                 return try await uniffiObj.request(
-                     method: try FfiConverterTypeHttpMethod_lift(method),
-                     url: try FfiConverterString.lift(url),
-                     headers: try FfiConverterSequenceTypeHeader.lift(headers),
-                     body: try FfiConverterOptionData.lift(body)
+                    method: FfiConverterTypeHttpMethod_lift(method),
+                    url: FfiConverterString.lift(url),
+                    headers: FfiConverterSequenceTypeHeader.lift(headers),
+                    body: FfiConverterOptionData.lift(body)
                 )
             }
 
@@ -699,7 +686,7 @@ fileprivate struct UniffiCallbackInterfaceHttpClient {
                     )
                 )
             }
-            let uniffiHandleError = { (statusCode, errorBuf) in
+            let uniffiHandleError = { statusCode, errorBuf in
                 uniffiFutureCallback(
                     uniffiCallbackData,
                     UniffiForeignFutureResultRustBuffer(
@@ -718,8 +705,8 @@ fileprivate struct UniffiCallbackInterfaceHttpClient {
         }
     )
 
-    // Rust stores this pointer for future callback invocations, so it must live
-    // for the process lifetime (not just for the init function call).
+    /// Rust stores this pointer for future callback invocations, so it must live
+    /// for the process lifetime (not just for the init function call).
     static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceHttpClient> = {
         let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceHttpClient>.allocate(capacity: 1)
         ptr.initialize(to: vtable)
@@ -732,7 +719,7 @@ private func uniffiCallbackInitHttpClient() {
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeHttpClient: FfiConverter {
     fileprivate static let handleMap = UniffiHandleMap<HttpClient>()
@@ -741,24 +728,24 @@ public struct FfiConverterTypeHttpClient: FfiConverter {
     typealias SwiftType = HttpClient
 
     public static func lift(_ handle: UInt64) throws -> HttpClient {
-        if ((handle & 1) == 0) {
+        if (handle & 1) == 0 {
             // Rust-generated handle, construct a new class that uses the handle to implement the
             // interface
-            return HttpClientImpl(unsafeFromHandle: handle)
+            HttpClientImpl(unsafeFromHandle: handle)
         } else {
             // Swift-generated handle, get the object from the handle map
-            return try handleMap.remove(handle: handle)
+            try handleMap.remove(handle: handle)
         }
     }
 
     public static func lower(_ value: HttpClient) -> UInt64 {
-         if let rustImpl = value as? HttpClientImpl {
-             // Rust-implemented object.  Clone the handle and return it
-            return rustImpl.uniffiCloneHandle()
-         } else {
+        if let rustImpl = value as? HttpClientImpl {
+            // Rust-implemented object.  Clone the handle and return it
+            rustImpl.uniffiCloneHandle()
+        } else {
             // Swift object, generate a new vtable handle and return that.
-            return handleMap.insert(obj: value)
-         }
+            handleMap.insert(obj: value)
+        }
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HttpClient {
@@ -771,40 +758,33 @@ public struct FfiConverterTypeHttpClient: FfiConverter {
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeHttpClient_lift(_ handle: UInt64) throws -> HttpClient {
-    return try FfiConverterTypeHttpClient.lift(handle)
+    try FfiConverterTypeHttpClient.lift(handle)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeHttpClient_lower(_ value: HttpClient) -> UInt64 {
-    return FfiConverterTypeHttpClient.lower(value)
+    FfiConverterTypeHttpClient.lower(value)
 }
-
-
-
-
-
 
 /**
  * A host- or Rust-provided WebSocket transport. Opens the LiveKit signalling
  * WebSocket; knows nothing about LiveKit/protobuf.
  */
 public protocol WsClient: AnyObject, Sendable {
-    
     /**
      * Open a WebSocket. `url` is the full ws(s):// URL including query string.
      * `timeout_ms` bounds connection establishment. Milliseconds, not `Duration`:
      * a `Duration` parameter breaks uniffi-dart's foreign codegen.
      */
-    func connect(url: String, headers: [Header], timeoutMs: UInt64) async throws  -> WsConnectResult
-    
+    func connect(url: String, headers: [Header], timeoutMs: UInt64) async throws -> WsConnectResult
 }
+
 /**
  * A host- or Rust-provided WebSocket transport. Opens the LiveKit signalling
  * WebSocket; knows nothing about LiveKit/protobuf.
@@ -812,10 +792,10 @@ public protocol WsClient: AnyObject, Sendable {
 open class WsClientImpl: WsClient, @unchecked Sendable {
     fileprivate let handle: UInt64
 
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    // Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public struct NoHandle {
         public init() {}
     }
@@ -823,10 +803,10 @@ open class WsClientImpl: WsClient, @unchecked Sendable {
     // TODO: We'd like this to be `private` but for Swifty reasons,
     // we can't implement `FfiConverter` without making this `required` and we can't
     // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromHandle handle: UInt64) {
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public required init(unsafeFromHandle handle: UInt64) {
         self.handle = handle
     }
 
@@ -835,19 +815,20 @@ open class WsClientImpl: WsClient, @unchecked Sendable {
     //
     // - Warning:
     //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public init(noHandle _: NoHandle) {
+        handle = 0
     }
 
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_livekit_net_fn_clone_wsclient(self.handle, $0) }
+        try! rustCall { uniffi_livekit_net_fn_clone_wsclient(self.handle, $0) }
     }
+
     // No primary constructor declared for this class.
 
     deinit {
@@ -859,21 +840,17 @@ open class WsClientImpl: WsClient, @unchecked Sendable {
         try! rustCall { uniffi_livekit_net_fn_free_wsclient(handle, $0) }
     }
 
-    
-
-    
     /**
      * Open a WebSocket. `url` is the full ws(s):// URL including query string.
      * `timeout_ms` bounds connection establishment. Milliseconds, not `Duration`:
      * a `Duration` parameter breaks uniffi-dart's foreign codegen.
      */
-open func connect(url: String, headers: [Header], timeoutMs: UInt64)async throws  -> WsConnectResult  {
-    return
-        try  await uniffiRustCallAsync(
+    open func connect(url: String, headers: [Header], timeoutMs: UInt64) async throws -> WsConnectResult {
+        try await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_livekit_net_fn_method_wsclient_connect(
                     self.uniffiCloneHandle(),
-                    FfiConverterString.lower(url),FfiConverterSequenceTypeHeader.lower(headers),FfiConverterUInt64.lower(timeoutMs)
+                    FfiConverterString.lower(url), FfiConverterSequenceTypeHeader.lower(headers), FfiConverterUInt64.lower(timeoutMs)
                 )
             },
             pollFunc: ffi_livekit_net_rust_future_poll_rust_buffer,
@@ -882,23 +859,17 @@ open func connect(url: String, headers: [Header], timeoutMs: UInt64)async throws
             liftFunc: FfiConverterTypeWsConnectResult_lift,
             errorHandler: FfiConverterTypeTransportError_lift
         )
-}
-    
-
-    
+    }
 }
 
-
-
-// Put the implementation in a struct so we don't pollute the top-level namespace
-fileprivate struct UniffiCallbackInterfaceWsClient {
-
-    // Create the VTable using a series of closures.
-    // Swift automatically converts these into C callback functions.
-    //
-    // Store the vtable directly.
-    static let vtable: UniffiVTableCallbackInterfaceWsClient = UniffiVTableCallbackInterfaceWsClient(
-        uniffiFree: { (uniffiHandle: UInt64) -> () in
+/// Put the implementation in a struct so we don't pollute the top-level namespace
+private enum UniffiCallbackInterfaceWsClient {
+    /// Create the VTable using a series of closures.
+    /// Swift automatically converts these into C callback functions.
+    ///
+    /// Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceWsClient = .init(
+        uniffiFree: { (uniffiHandle: UInt64) in
             do {
                 try FfiConverterTypeWsClient.handleMap.remove(handle: uniffiHandle)
             } catch {
@@ -927,9 +898,9 @@ fileprivate struct UniffiCallbackInterfaceWsClient {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
                 return try await uniffiObj.connect(
-                     url: try FfiConverterString.lift(url),
-                     headers: try FfiConverterSequenceTypeHeader.lift(headers),
-                     timeoutMs: try FfiConverterUInt64.lift(timeoutMs)
+                    url: FfiConverterString.lift(url),
+                    headers: FfiConverterSequenceTypeHeader.lift(headers),
+                    timeoutMs: FfiConverterUInt64.lift(timeoutMs)
                 )
             }
 
@@ -942,7 +913,7 @@ fileprivate struct UniffiCallbackInterfaceWsClient {
                     )
                 )
             }
-            let uniffiHandleError = { (statusCode, errorBuf) in
+            let uniffiHandleError = { statusCode, errorBuf in
                 uniffiFutureCallback(
                     uniffiCallbackData,
                     UniffiForeignFutureResultRustBuffer(
@@ -961,8 +932,8 @@ fileprivate struct UniffiCallbackInterfaceWsClient {
         }
     )
 
-    // Rust stores this pointer for future callback invocations, so it must live
-    // for the process lifetime (not just for the init function call).
+    /// Rust stores this pointer for future callback invocations, so it must live
+    /// for the process lifetime (not just for the init function call).
     static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceWsClient> = {
         let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceWsClient>.allocate(capacity: 1)
         ptr.initialize(to: vtable)
@@ -975,7 +946,7 @@ private func uniffiCallbackInitWsClient() {
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeWsClient: FfiConverter {
     fileprivate static let handleMap = UniffiHandleMap<WsClient>()
@@ -984,24 +955,24 @@ public struct FfiConverterTypeWsClient: FfiConverter {
     typealias SwiftType = WsClient
 
     public static func lift(_ handle: UInt64) throws -> WsClient {
-        if ((handle & 1) == 0) {
+        if (handle & 1) == 0 {
             // Rust-generated handle, construct a new class that uses the handle to implement the
             // interface
-            return WsClientImpl(unsafeFromHandle: handle)
+            WsClientImpl(unsafeFromHandle: handle)
         } else {
             // Swift-generated handle, get the object from the handle map
-            return try handleMap.remove(handle: handle)
+            try handleMap.remove(handle: handle)
         }
     }
 
     public static func lower(_ value: WsClient) -> UInt64 {
-         if let rustImpl = value as? WsClientImpl {
-             // Rust-implemented object.  Clone the handle and return it
-            return rustImpl.uniffiCloneHandle()
-         } else {
+        if let rustImpl = value as? WsClientImpl {
+            // Rust-implemented object.  Clone the handle and return it
+            rustImpl.uniffiCloneHandle()
+        } else {
             // Swift object, generate a new vtable handle and return that.
-            return handleMap.insert(obj: value)
-         }
+            handleMap.insert(obj: value)
+        }
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WsClient {
@@ -1014,48 +985,41 @@ public struct FfiConverterTypeWsClient: FfiConverter {
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeWsClient_lift(_ handle: UInt64) throws -> WsClient {
-    return try FfiConverterTypeWsClient.lift(handle)
+    try FfiConverterTypeWsClient.lift(handle)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeWsClient_lower(_ value: WsClient) -> UInt64 {
-    return FfiConverterTypeWsClient.lower(value)
+    FfiConverterTypeWsClient.lower(value)
 }
-
-
-
-
-
 
 /**
  * A single open WebSocket connection. Control frames (ping/pong, close handshake)
  * are the implementation's own responsibility; only binary application frames cross here.
  */
 public protocol WsConnection: AnyObject, Sendable {
-    
     /**
      * Send one binary application frame.
      */
-    func send(frame: Data) async throws 
-    
+    func send(frame: Data) async throws
+
     /**
      * Receive the next binary frame. `Ok(None)` means the peer/transport closed.
      */
-    func recv() async throws  -> Data?
-    
+    func recv() async throws -> Data?
+
     /**
      * Close the connection, sending a close frame if the transport supports it.
      */
-    func close() async 
-    
+    func close() async
 }
+
 /**
  * A single open WebSocket connection. Control frames (ping/pong, close handshake)
  * are the implementation's own responsibility; only binary application frames cross here.
@@ -1063,10 +1027,10 @@ public protocol WsConnection: AnyObject, Sendable {
 open class WsConnectionImpl: WsConnection, @unchecked Sendable {
     fileprivate let handle: UInt64
 
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    // Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public struct NoHandle {
         public init() {}
     }
@@ -1074,10 +1038,10 @@ open class WsConnectionImpl: WsConnection, @unchecked Sendable {
     // TODO: We'd like this to be `private` but for Swifty reasons,
     // we can't implement `FfiConverter` without making this `required` and we can't
     // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromHandle handle: UInt64) {
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public required init(unsafeFromHandle handle: UInt64) {
         self.handle = handle
     }
 
@@ -1086,19 +1050,20 @@ open class WsConnectionImpl: WsConnection, @unchecked Sendable {
     //
     // - Warning:
     //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
+    public init(noHandle _: NoHandle) {
+        handle = 0
     }
 
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
+    #if swift(>=5.8)
+        @_documentation(visibility: private)
+    #endif
     public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_livekit_net_fn_clone_wsconnection(self.handle, $0) }
+        try! rustCall { uniffi_livekit_net_fn_clone_wsconnection(self.handle, $0) }
     }
+
     // No primary constructor declared for this class.
 
     deinit {
@@ -1110,15 +1075,11 @@ open class WsConnectionImpl: WsConnection, @unchecked Sendable {
         try! rustCall { uniffi_livekit_net_fn_free_wsconnection(handle, $0) }
     }
 
-    
-
-    
     /**
      * Send one binary application frame.
      */
-open func send(frame: Data)async throws   {
-    return
-        try  await uniffiRustCallAsync(
+    open func send(frame: Data) async throws {
+        try await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_livekit_net_fn_method_wsconnection_send(
                     self.uniffiCloneHandle(),
@@ -1131,18 +1092,16 @@ open func send(frame: Data)async throws   {
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeTransportError_lift
         )
-}
-    
+    }
+
     /**
      * Receive the next binary frame. `Ok(None)` means the peer/transport closed.
      */
-open func recv()async throws  -> Data?  {
-    return
-        try  await uniffiRustCallAsync(
+    open func recv() async throws -> Data? {
+        try await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_livekit_net_fn_method_wsconnection_recv(
                     self.uniffiCloneHandle()
-                    
                 )
             },
             pollFunc: ffi_livekit_net_rust_future_poll_rust_buffer,
@@ -1151,18 +1110,16 @@ open func recv()async throws  -> Data?  {
             liftFunc: FfiConverterOptionData.lift,
             errorHandler: FfiConverterTypeTransportError_lift
         )
-}
-    
+    }
+
     /**
      * Close the connection, sending a close frame if the transport supports it.
      */
-open func close()async   {
-    return
-        try!  await uniffiRustCallAsync(
+    open func close() async {
+        try! await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_livekit_net_fn_method_wsconnection_close(
                     self.uniffiCloneHandle()
-                    
                 )
             },
             pollFunc: ffi_livekit_net_rust_future_poll_void,
@@ -1170,25 +1127,18 @@ open func close()async   {
             freeFunc: ffi_livekit_net_rust_future_free_void,
             liftFunc: { $0 },
             errorHandler: nil
-            
         )
-}
-    
-
-    
+    }
 }
 
-
-
-// Put the implementation in a struct so we don't pollute the top-level namespace
-fileprivate struct UniffiCallbackInterfaceWsConnection {
-
-    // Create the VTable using a series of closures.
-    // Swift automatically converts these into C callback functions.
-    //
-    // Store the vtable directly.
-    static let vtable: UniffiVTableCallbackInterfaceWsConnection = UniffiVTableCallbackInterfaceWsConnection(
-        uniffiFree: { (uniffiHandle: UInt64) -> () in
+/// Put the implementation in a struct so we don't pollute the top-level namespace
+private enum UniffiCallbackInterfaceWsConnection {
+    /// Create the VTable using a series of closures.
+    /// Swift automatically converts these into C callback functions.
+    ///
+    /// Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceWsConnection = .init(
+        uniffiFree: { (uniffiHandle: UInt64) in
             do {
                 try FfiConverterTypeWsConnection.handleMap.remove(handle: uniffiHandle)
             } catch {
@@ -1210,16 +1160,16 @@ fileprivate struct UniffiCallbackInterfaceWsConnection {
             uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
         ) in
             let makeCall = {
-                () async throws -> () in
+                () async throws in
                 guard let uniffiObj = try? FfiConverterTypeWsConnection.handleMap.get(handle: uniffiHandle) else {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
                 return try await uniffiObj.send(
-                     frame: try FfiConverterData.lift(frame)
+                    frame: FfiConverterData.lift(frame)
                 )
             }
 
-            let uniffiHandleSuccess = { (returnValue: ()) in
+            let uniffiHandleSuccess = { (_: ()) in
                 uniffiFutureCallback(
                     uniffiCallbackData,
                     UniffiForeignFutureResultVoid(
@@ -1227,7 +1177,7 @@ fileprivate struct UniffiCallbackInterfaceWsConnection {
                     )
                 )
             }
-            let uniffiHandleError = { (statusCode, errorBuf) in
+            let uniffiHandleError = { statusCode, errorBuf in
                 uniffiFutureCallback(
                     uniffiCallbackData,
                     UniffiForeignFutureResultVoid(
@@ -1267,7 +1217,7 @@ fileprivate struct UniffiCallbackInterfaceWsConnection {
                     )
                 )
             }
-            let uniffiHandleError = { (statusCode, errorBuf) in
+            let uniffiHandleError = { statusCode, errorBuf in
                 uniffiFutureCallback(
                     uniffiCallbackData,
                     UniffiForeignFutureResultRustBuffer(
@@ -1291,7 +1241,7 @@ fileprivate struct UniffiCallbackInterfaceWsConnection {
             uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
         ) in
             let makeCall = {
-                () async throws -> () in
+                () async throws in
                 guard let uniffiObj = try? FfiConverterTypeWsConnection.handleMap.get(handle: uniffiHandle) else {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
@@ -1299,7 +1249,7 @@ fileprivate struct UniffiCallbackInterfaceWsConnection {
                 )
             }
 
-            let uniffiHandleSuccess = { (returnValue: ()) in
+            let uniffiHandleSuccess = { (_: ()) in
                 uniffiFutureCallback(
                     uniffiCallbackData,
                     UniffiForeignFutureResultVoid(
@@ -1307,7 +1257,7 @@ fileprivate struct UniffiCallbackInterfaceWsConnection {
                     )
                 )
             }
-            let uniffiHandleError = { (statusCode, errorBuf) in
+            let uniffiHandleError = { statusCode, errorBuf in
                 uniffiFutureCallback(
                     uniffiCallbackData,
                     UniffiForeignFutureResultVoid(
@@ -1324,8 +1274,8 @@ fileprivate struct UniffiCallbackInterfaceWsConnection {
         }
     )
 
-    // Rust stores this pointer for future callback invocations, so it must live
-    // for the process lifetime (not just for the init function call).
+    /// Rust stores this pointer for future callback invocations, so it must live
+    /// for the process lifetime (not just for the init function call).
     static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceWsConnection> = {
         let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceWsConnection>.allocate(capacity: 1)
         ptr.initialize(to: vtable)
@@ -1338,7 +1288,7 @@ private func uniffiCallbackInitWsConnection() {
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeWsConnection: FfiConverter {
     fileprivate static let handleMap = UniffiHandleMap<WsConnection>()
@@ -1347,24 +1297,24 @@ public struct FfiConverterTypeWsConnection: FfiConverter {
     typealias SwiftType = WsConnection
 
     public static func lift(_ handle: UInt64) throws -> WsConnection {
-        if ((handle & 1) == 0) {
+        if (handle & 1) == 0 {
             // Rust-generated handle, construct a new class that uses the handle to implement the
             // interface
-            return WsConnectionImpl(unsafeFromHandle: handle)
+            WsConnectionImpl(unsafeFromHandle: handle)
         } else {
             // Swift-generated handle, get the object from the handle map
-            return try handleMap.remove(handle: handle)
+            try handleMap.remove(handle: handle)
         }
     }
 
     public static func lower(_ value: WsConnection) -> UInt64 {
-         if let rustImpl = value as? WsConnectionImpl {
-             // Rust-implemented object.  Clone the handle and return it
-            return rustImpl.uniffiCloneHandle()
-         } else {
+        if let rustImpl = value as? WsConnectionImpl {
+            // Rust-implemented object.  Clone the handle and return it
+            rustImpl.uniffiCloneHandle()
+        } else {
             // Swift object, generate a new vtable handle and return that.
-            return handleMap.insert(obj: value)
-         }
+            handleMap.insert(obj: value)
+        }
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WsConnection {
@@ -1377,23 +1327,19 @@ public struct FfiConverterTypeWsConnection: FfiConverter {
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeWsConnection_lift(_ handle: UInt64) throws -> WsConnection {
-    return try FfiConverterTypeWsConnection.lift(handle)
+    try FfiConverterTypeWsConnection.lift(handle)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeWsConnection_lower(_ value: WsConnection) -> UInt64 {
-    return FfiConverterTypeWsConnection.lower(value)
+    FfiConverterTypeWsConnection.lower(value)
 }
-
-
-
 
 /**
  * A single HTTP/WebSocket request header.
@@ -1402,31 +1348,26 @@ public struct Header: Equatable, Hashable {
     public var name: String
     public var value: String
 
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
     public init(name: String, value: String) {
         self.name = name
         self.value = value
     }
-
-    
-
-    
 }
 
 #if compiler(>=6)
-extension Header: Sendable {}
+    extension Header: Sendable {}
 #endif
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeHeader: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Header {
-        return
-            try Header(
-                name: FfiConverterString.read(from: &buf), 
-                value: FfiConverterString.read(from: &buf)
+        try Header(
+            name: FfiConverterString.read(from: &buf),
+            value: FfiConverterString.read(from: &buf)
         )
     }
 
@@ -1436,21 +1377,19 @@ public struct FfiConverterTypeHeader: FfiConverterRustBuffer {
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeHeader_lift(_ buf: RustBuffer) throws -> Header {
-    return try FfiConverterTypeHeader.lift(buf)
+    try FfiConverterTypeHeader.lift(buf)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeHeader_lower(_ value: Header) -> RustBuffer {
-    return FfiConverterTypeHeader.lower(value)
+    FfiConverterTypeHeader.lower(value)
 }
-
 
 /**
  * The result of an HTTP request performed by the transport.
@@ -1463,36 +1402,32 @@ public struct HttpResponse: Equatable, Hashable {
     public var headers: [Header]
     public var body: Data
 
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(status: UInt16, 
-        /**
-         * Response headers, in receipt order. Lets callers read e.g. `Cache-Control`.
-         */headers: [Header], body: Data) {
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
+    public init(status: UInt16,
+                /* 
+                    * Response headers, in receipt order. Lets callers read e.g. `Cache-Control`.
+                    */ headers: [Header], body: Data)
+    {
         self.status = status
         self.headers = headers
         self.body = body
     }
-
-    
-
-    
 }
 
 #if compiler(>=6)
-extension HttpResponse: Sendable {}
+    extension HttpResponse: Sendable {}
 #endif
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeHttpResponse: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HttpResponse {
-        return
-            try HttpResponse(
-                status: FfiConverterUInt16.read(from: &buf), 
-                headers: FfiConverterSequenceTypeHeader.read(from: &buf), 
-                body: FfiConverterData.read(from: &buf)
+        try HttpResponse(
+            status: FfiConverterUInt16.read(from: &buf),
+            headers: FfiConverterSequenceTypeHeader.read(from: &buf),
+            body: FfiConverterData.read(from: &buf)
         )
     }
 
@@ -1503,21 +1438,19 @@ public struct FfiConverterTypeHttpResponse: FfiConverterRustBuffer {
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeHttpResponse_lift(_ buf: RustBuffer) throws -> HttpResponse {
-    return try FfiConverterTypeHttpResponse.lift(buf)
+    try FfiConverterTypeHttpResponse.lift(buf)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeHttpResponse_lower(_ value: HttpResponse) -> RustBuffer {
-    return FfiConverterTypeHttpResponse.lower(value)
+    FfiConverterTypeHttpResponse.lower(value)
 }
-
 
 /**
  * The connection opened by [`WsClient::connect`].
@@ -1528,29 +1461,24 @@ public func FfiConverterTypeHttpResponse_lower(_ value: HttpResponse) -> RustBuf
 public struct WsConnectResult {
     public var connection: WsConnection
 
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
+    /// Default memberwise initializers are never public by default, so we
+    /// declare one manually.
     public init(connection: WsConnection) {
         self.connection = connection
     }
-
-    
-
-    
 }
 
 #if compiler(>=6)
-extension WsConnectResult: Sendable {}
+    extension WsConnectResult: Sendable {}
 #endif
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeWsConnectResult: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WsConnectResult {
-        return
-            try WsConnectResult(
-                connection: FfiConverterTypeWsConnection.read(from: &buf)
+        try WsConnectResult(
+            connection: FfiConverterTypeWsConnection.read(from: &buf)
         )
     }
 
@@ -1559,44 +1487,37 @@ public struct FfiConverterTypeWsConnectResult: FfiConverterRustBuffer {
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeWsConnectResult_lift(_ buf: RustBuffer) throws -> WsConnectResult {
-    return try FfiConverterTypeWsConnectResult.lift(buf)
+    try FfiConverterTypeWsConnectResult.lift(buf)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeWsConnectResult_lower(_ value: WsConnectResult) -> RustBuffer {
-    return FfiConverterTypeWsConnectResult.lower(value)
+    FfiConverterTypeWsConnectResult.lower(value)
 }
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
-/**
+/* 
  * The HTTP method for an [`HttpClient::request`].
  */
 
 public enum HttpMethod: Equatable, Hashable {
-    
     case get
     case post
-
-
-
-
-
 }
 
 #if compiler(>=6)
-extension HttpMethod: Sendable {}
+    extension HttpMethod: Sendable {}
 #endif
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeHttpMethod: FfiConverterRustBuffer {
     typealias SwiftType = HttpMethod
@@ -1604,80 +1525,60 @@ public struct FfiConverterTypeHttpMethod: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HttpMethod {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-        
         case 1: return .get
-        
+
         case 2: return .post
-        
+
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: HttpMethod, into buf: inout [UInt8]) {
         switch value {
-        
-        
         case .get:
             writeInt(&buf, Int32(1))
-        
-        
+
         case .post:
             writeInt(&buf, Int32(2))
-        
         }
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeHttpMethod_lift(_ buf: RustBuffer) throws -> HttpMethod {
-    return try FfiConverterTypeHttpMethod.lift(buf)
+    try FfiConverterTypeHttpMethod.lift(buf)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeHttpMethod_lower(_ value: HttpMethod) -> RustBuffer {
-    return FfiConverterTypeHttpMethod.lower(value)
+    FfiConverterTypeHttpMethod.lower(value)
 }
-
-
 
 /**
  * Errors a transport implementation may return. Mapped onto `SignalError` by the caller.
  */
 public enum TransportError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
-
-    
-    
     case Timeout
-    case Connection(String
-    )
-    case Http(status: UInt16
-    )
+    case Connection(String)
+    case Http(status: UInt16)
     case Closed
-    case Other(String
-    )
+    case Other(String)
 
-    
-
-    
-
-    
     public var errorDescription: String? {
         String(reflecting: self)
     }
-    
 }
 
 #if compiler(>=6)
-extension TransportError: Sendable {}
+    extension TransportError: Sendable {}
 #endif
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public struct FfiConverterTypeTransportError: FfiConverterRustBuffer {
     typealias SwiftType = TransportError
@@ -1685,82 +1586,66 @@ public struct FfiConverterTypeTransportError: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TransportError {
         let variant: Int32 = try readInt(&buf)
         switch variant {
-
-        
-
-        
         case 1: return .Timeout
-        case 2: return .Connection(
-            try FfiConverterString.read(from: &buf)
+        case 2: return try .Connection(
+                FfiConverterString.read(from: &buf)
             )
-        case 3: return .Http(
-            status: try FfiConverterUInt16.read(from: &buf)
+        case 3: return try .Http(
+                status: FfiConverterUInt16.read(from: &buf)
             )
         case 4: return .Closed
-        case 5: return .Other(
-            try FfiConverterString.read(from: &buf)
+        case 5: return try .Other(
+                FfiConverterString.read(from: &buf)
             )
-
-         default: throw UniffiInternalError.unexpectedEnumCase
+        default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
 
     public static func write(_ value: TransportError, into buf: inout [UInt8]) {
         switch value {
-
-        
-
-        
-        
         case .Timeout:
             writeInt(&buf, Int32(1))
-        
-        
+
         case let .Connection(v1):
             writeInt(&buf, Int32(2))
             FfiConverterString.write(v1, into: &buf)
-            
-        
+
         case let .Http(status):
             writeInt(&buf, Int32(3))
             FfiConverterUInt16.write(status, into: &buf)
-            
-        
+
         case .Closed:
             writeInt(&buf, Int32(4))
-        
-        
+
         case let .Other(v1):
             writeInt(&buf, Int32(5))
             FfiConverterString.write(v1, into: &buf)
-            
         }
     }
 }
 
-
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeTransportError_lift(_ buf: RustBuffer) throws -> TransportError {
-    return try FfiConverterTypeTransportError.lift(buf)
+    try FfiConverterTypeTransportError.lift(buf)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
 public func FfiConverterTypeTransportError_lower(_ value: TransportError) -> RustBuffer {
-    return FfiConverterTypeTransportError.lower(value)
+    FfiConverterTypeTransportError.lower(value)
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
+private struct FfiConverterOptionData: FfiConverterRustBuffer {
     typealias SwiftType = Data?
 
-    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
-        guard let value = value else {
+    static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value else {
             writeInt(&buf, Int8(0))
             return
         }
@@ -1768,7 +1653,7 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
         FfiConverterData.write(value, into: &buf)
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterData.read(from: &buf)
@@ -1778,12 +1663,12 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
 }
 
 #if swift(>=5.8)
-@_documentation(visibility: private)
+    @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterSequenceTypeHeader: FfiConverterRustBuffer {
+private struct FfiConverterSequenceTypeHeader: FfiConverterRustBuffer {
     typealias SwiftType = [Header]
 
-    public static func write(_ value: [Header], into buf: inout [UInt8]) {
+    static func write(_ value: [Header], into buf: inout [UInt8]) {
         let len = Int32(value.count)
         writeInt(&buf, len)
         for item in value {
@@ -1791,26 +1676,27 @@ fileprivate struct FfiConverterSequenceTypeHeader: FfiConverterRustBuffer {
         }
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Header] {
+    static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Header] {
         let len: Int32 = try readInt(&buf)
         var seq = [Header]()
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeHeader.read(from: &buf))
+            try seq.append(FfiConverterTypeHeader.read(from: &buf))
         }
         return seq
     }
 }
+
 private let UNIFFI_RUST_FUTURE_POLL_READY: Int8 = 0
 private let UNIFFI_RUST_FUTURE_POLL_WAKE: Int8 = 1
 
-fileprivate let uniffiContinuationHandleMap = UniffiHandleMap<UnsafeContinuation<Int8, Never>>()
+private let uniffiContinuationHandleMap = UniffiHandleMap<UnsafeContinuation<Int8, Never>>()
 
-fileprivate func uniffiRustCallAsync<F, T>(
+private func uniffiRustCallAsync<F, T>(
     rustFutureFunc: () -> UInt64,
-    pollFunc: (UInt64, @escaping UniffiRustFutureContinuationCallback, UInt64) -> (),
+    pollFunc: (UInt64, @escaping UniffiRustFutureContinuationCallback, UInt64) -> Void,
     completeFunc: (UInt64, UnsafeMutablePointer<RustCallStatus>) -> F,
-    freeFunc: (UInt64) -> (),
+    freeFunc: (UInt64) -> Void,
     liftFunc: (F) throws -> T,
     errorHandler: ((RustBuffer) throws -> Swift.Error)?
 ) async throws -> T {
@@ -1821,7 +1707,7 @@ fileprivate func uniffiRustCallAsync<F, T>(
     defer {
         freeFunc(rustFuture)
     }
-    var pollResult: Int8;
+    var pollResult: Int8
     repeat {
         pollResult = await withUnsafeContinuation {
             pollFunc(
@@ -1840,19 +1726,20 @@ fileprivate func uniffiRustCallAsync<F, T>(
     ))
 }
 
-// Callback handlers for an async calls.  These are invoked by Rust when the future is ready.  They
-// lift the return value or error and resume the suspended function.
-fileprivate func uniffiFutureContinuationCallback(handle: UInt64, pollResult: Int8) {
+/// Callback handlers for an async calls.  These are invoked by Rust when the future is ready.  They
+/// lift the return value or error and resume the suspended function.
+private func uniffiFutureContinuationCallback(handle: UInt64, pollResult: Int8) {
     if let continuation = try? uniffiContinuationHandleMap.remove(handle: handle) {
         continuation.resume(returning: pollResult)
     } else {
         print("uniffiFutureContinuationCallback invalid handle")
     }
 }
+
 private func uniffiTraitInterfaceCallAsync<T>(
     makeCall: @escaping () async throws -> T,
-    handleSuccess: @escaping (T) -> (),
-    handleError: @escaping (Int8, RustBuffer) -> (),
+    handleSuccess: @escaping (T) -> Void,
+    handleError: @escaping (Int8, RustBuffer) -> Void,
     droppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
 ) {
     let task = Task {
@@ -1882,8 +1769,8 @@ private func uniffiTraitInterfaceCallAsync<T>(
 
 private func uniffiTraitInterfaceCallAsyncWithError<T, E>(
     makeCall: @escaping () async throws -> T,
-    handleSuccess: @escaping (T) -> (),
-    handleError: @escaping (Int8, RustBuffer) -> (),
+    handleSuccess: @escaping (T) -> Void,
+    handleError: @escaping (Int8, RustBuffer) -> Void,
     lowerError: @escaping (E) -> RustBuffer,
     droppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
 ) {
@@ -1911,13 +1798,13 @@ private func uniffiTraitInterfaceCallAsyncWithError<T, E>(
 
 // Borrow the callback handle map implementation to store foreign future handles
 // TODO: consolidate the handle-map code (https://github.com/mozilla/uniffi-rs/pull/1823)
-fileprivate let UNIFFI_FOREIGN_FUTURE_HANDLE_MAP = UniffiHandleMap<UniffiForeignFutureTask>()
+private let UNIFFI_FOREIGN_FUTURE_HANDLE_MAP = UniffiHandleMap<UniffiForeignFutureTask>()
 
-// Protocol for tasks that handle foreign futures.
-//
-// Defining a protocol allows all tasks to be stored in the same handle map.  This can't be done
-// with the task object itself, since has generic parameters.
-fileprivate protocol UniffiForeignFutureTask {
+/// Protocol for tasks that handle foreign futures.
+///
+/// Defining a protocol allows all tasks to be stored in the same handle map.  This can't be done
+/// with the task object itself, since has generic parameters.
+private protocol UniffiForeignFutureTask {
     func cancel()
 }
 
@@ -1935,10 +1822,11 @@ private func uniffiForeignFutureDroppedCallback(handle: UInt64) {
     }
 }
 
-// For testing
+/// For testing
 public func uniffiForeignFutureHandleCountLivekitNet() -> Int {
     UNIFFI_FOREIGN_FUTURE_HANDLE_MAP.count
 }
+
 /**
  * Test probe: whether a host has explicitly registered an HTTP client via
  * [`set_http_client`].
@@ -1946,12 +1834,12 @@ public func uniffiForeignFutureHandleCountLivekitNet() -> Int {
  * Reports registration, not resolvability: on native builds [`http_client`]
  * still yields the built-in client when this returns `false`.
  */
-public func hasHttpClient() -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_livekit_net_fn_func_has_http_client($0
-    )
-})
+public func hasHttpClient() -> Bool {
+    try! FfiConverterBool.lift(try! rustCall {
+        uniffi_livekit_net_fn_func_has_http_client($0)
+    })
 }
+
 /**
  * Test probe: whether a host has explicitly registered a WebSocket client via
  * [`set_ws_client`].
@@ -1959,59 +1847,59 @@ public func hasHttpClient() -> Bool  {
  * Reports registration, not resolvability: on native builds [`ws_client`] still
  * yields the built-in client when this returns `false`.
  */
-public func hasWsClient() -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_livekit_net_fn_func_has_ws_client($0
-    )
-})
+public func hasWsClient() -> Bool {
+    try! FfiConverterBool.lift(try! rustCall {
+        uniffi_livekit_net_fn_func_has_ws_client($0)
+    })
 }
+
 /**
  * Self-test: GET `url` via the registered HTTP client; returns the full response
  * (status + headers + body) so callers can assert the whole struct round-trips the FFI.
  * Errors if no client is registered or the transport fails.
  */
-public func selfTestHttpGet(url: String)async throws  -> HttpResponse  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_livekit_net_fn_func_self_test_http_get(FfiConverterString.lower(url)
-                )
-            },
-            pollFunc: ffi_livekit_net_rust_future_poll_rust_buffer,
-            completeFunc: ffi_livekit_net_rust_future_complete_rust_buffer,
-            freeFunc: ffi_livekit_net_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterTypeHttpResponse_lift,
-            errorHandler: FfiConverterTypeTransportError_lift
-        )
+public func selfTestHttpGet(url: String) async throws -> HttpResponse {
+    try await uniffiRustCallAsync(
+        rustFutureFunc: {
+            uniffi_livekit_net_fn_func_self_test_http_get(FfiConverterString.lower(url))
+        },
+        pollFunc: ffi_livekit_net_rust_future_poll_rust_buffer,
+        completeFunc: ffi_livekit_net_rust_future_complete_rust_buffer,
+        freeFunc: ffi_livekit_net_rust_future_free_rust_buffer,
+        liftFunc: FfiConverterTypeHttpResponse_lift,
+        errorHandler: FfiConverterTypeTransportError_lift
+    )
 }
+
 /**
  * Self-test: connect, send `payload`, receive one frame, close; return the echoed bytes.
  * Errors if no client is registered, the transport fails, or the peer closes first.
  */
-public func selfTestWsEcho(url: String, payload: Data)async throws  -> Data  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_livekit_net_fn_func_self_test_ws_echo(FfiConverterString.lower(url),FfiConverterData.lower(payload)
-                )
-            },
-            pollFunc: ffi_livekit_net_rust_future_poll_rust_buffer,
-            completeFunc: ffi_livekit_net_rust_future_complete_rust_buffer,
-            freeFunc: ffi_livekit_net_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterData.lift,
-            errorHandler: FfiConverterTypeTransportError_lift
-        )
+public func selfTestWsEcho(url: String, payload: Data) async throws -> Data {
+    try await uniffiRustCallAsync(
+        rustFutureFunc: {
+            uniffi_livekit_net_fn_func_self_test_ws_echo(FfiConverterString.lower(url), FfiConverterData.lower(payload))
+        },
+        pollFunc: ffi_livekit_net_rust_future_poll_rust_buffer,
+        completeFunc: ffi_livekit_net_rust_future_complete_rust_buffer,
+        freeFunc: ffi_livekit_net_rust_future_free_rust_buffer,
+        liftFunc: FfiConverterData.lift,
+        errorHandler: FfiConverterTypeTransportError_lift
+    )
 }
+
 /**
  * Register the process-wide HTTP client. Call once at startup, before the first
  * request. A later call is ignored (first registration wins).
  */
-public func setHttpClient(c: HttpClient)  {try! rustCall() {
-    uniffi_livekit_net_fn_func_set_http_client(
-        FfiConverterTypeHttpClient_lower(c),$0
-    )
+public func setHttpClient(c: HttpClient) {
+    try! rustCall {
+        uniffi_livekit_net_fn_func_set_http_client(
+            FfiConverterTypeHttpClient_lower(c), $0
+        )
+    }
 }
-}
+
 /**
  * Register the process-wide WebSocket client. Call once at startup, before the
  * first `connect`. A later call is ignored (first registration wins).
@@ -2019,11 +1907,12 @@ public func setHttpClient(c: HttpClient)  {try! rustCall() {
  * Independent of [`set_http_client`]: a consumer that only needs HTTP (e.g. a
  * token source) can register that alone, and vice versa.
  */
-public func setWsClient(c: WsClient)  {try! rustCall() {
-    uniffi_livekit_net_fn_func_set_ws_client(
-        FfiConverterTypeWsClient_lower(c),$0
-    )
-}
+public func setWsClient(c: WsClient) {
+    try! rustCall {
+        uniffi_livekit_net_fn_func_set_ws_client(
+            FfiConverterTypeWsClient_lower(c), $0
+        )
+    }
 }
 
 private enum InitializationResult {
@@ -2031,8 +1920,9 @@ private enum InitializationResult {
     case contractVersionMismatch
     case apiChecksumMismatch
 }
-// Use a global variable to perform the versioning checks. Swift ensures that
-// the code inside is only computed once.
+
+/// Use a global variable to perform the versioning checks. Swift ensures that
+/// the code inside is only computed once.
 private let initializationResult: InitializationResult = {
     // Get the bindings contract version from our ComponentInterface
     let bindings_contract_version = 30
@@ -2041,37 +1931,37 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_livekit_net_checksum_func_has_http_client() != 31874) {
+    if uniffi_livekit_net_checksum_func_has_http_client() != 31874 {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_net_checksum_func_has_ws_client() != 1427) {
+    if uniffi_livekit_net_checksum_func_has_ws_client() != 1427 {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_net_checksum_func_self_test_http_get() != 58956) {
+    if uniffi_livekit_net_checksum_func_self_test_http_get() != 58956 {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_net_checksum_func_self_test_ws_echo() != 54359) {
+    if uniffi_livekit_net_checksum_func_self_test_ws_echo() != 54359 {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_net_checksum_func_set_http_client() != 2382) {
+    if uniffi_livekit_net_checksum_func_set_http_client() != 2382 {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_net_checksum_func_set_ws_client() != 25157) {
+    if uniffi_livekit_net_checksum_func_set_ws_client() != 25157 {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_net_checksum_method_httpclient_request() != 22088) {
+    if uniffi_livekit_net_checksum_method_httpclient_request() != 22088 {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_net_checksum_method_wsclient_connect() != 54712) {
+    if uniffi_livekit_net_checksum_method_wsclient_connect() != 54712 {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_net_checksum_method_wsconnection_send() != 64949) {
+    if uniffi_livekit_net_checksum_method_wsconnection_send() != 64949 {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_net_checksum_method_wsconnection_recv() != 4606) {
+    if uniffi_livekit_net_checksum_method_wsconnection_recv() != 4606 {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_livekit_net_checksum_method_wsconnection_close() != 13655) {
+    if uniffi_livekit_net_checksum_method_wsconnection_close() != 13655 {
         return InitializationResult.apiChecksumMismatch
     }
 
@@ -2081,8 +1971,8 @@ private let initializationResult: InitializationResult = {
     return InitializationResult.ok
 }()
 
-// Make the ensure init function public so that other modules which have external type references to
-// our types can call it.
+/// Make the ensure init function public so that other modules which have external type references to
+/// our types can call it.
 public func uniffiEnsureLivekitNetInitialized() {
     switch initializationResult {
     case .ok:
